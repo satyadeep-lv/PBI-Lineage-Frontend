@@ -1,0 +1,202 @@
+name: Frontend CD
+
+on:
+  workflow_run:
+    workflows:
+      - Frontend CI
+    types:
+      - completed
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: pbi-lineage-frontend-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and Deploy Frontend
+
+    if: >-
+      vars.DEPLOYMENT_ENABLED == 'true' &&
+      (
+        (
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'main'
+        ) ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          github.ref == 'refs/heads/main'
+        )
+      )
+
+    runs-on: ubuntu-latest
+
+    environment:
+      name: production
+      url: https://lvpowerbilineage.com
+
+    env:
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_VM_NAME: ${{ vars.AZURE_VM_NAME }}
+
+      STORAGE_ACCOUNT_NAME: ${{ vars.STORAGE_ACCOUNT_NAME }}
+      STORAGE_CONTAINER_NAME: ${{ vars.FRONTEND_CONTAINER_NAME }}
+
+      IIS_SITE_NAME: PBI-Lineage
+
+    steps:
+      - name: Resolve release SHA
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            SHA="${{ github.event.workflow_run.head_sha }}"
+          else
+            SHA="${{ github.sha }}"
+          fi
+
+          if [ -z "$SHA" ]; then
+            echo "Unable to resolve release SHA."
+            exit 1
+          fi
+
+          echo "RELEASE_SHA=$SHA" >> "$GITHUB_ENV"
+
+      - name: Checkout release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production frontend
+        run: npm run build
+
+      - name: Validate production artifact
+        shell: bash
+        run: |
+          test -f build/client/index.html
+          test -f build/client/web.config
+
+      - name: Create deployment ZIP
+        shell: bash
+        run: |
+          ARTIFACT_NAME="frontend-${RELEASE_SHA}.zip"
+
+          cd build/client
+          zip -r "../../${ARTIFACT_NAME}" .
+          cd ../..
+
+          echo "ARTIFACT_NAME=${ARTIFACT_NAME}" \
+            >> "$GITHUB_ENV"
+
+          echo \
+            "VM_ARTIFACT_PATH=C:\\pbi-lineage\\artifacts\\${ARTIFACT_NAME}" \
+            >> "$GITHUB_ENV"
+
+      - name: Login to Azure using OIDC
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Upload frontend artifact
+        shell: bash
+        run: |
+          az storage blob upload \
+            --account-name "$STORAGE_ACCOUNT_NAME" \
+            --container-name "$STORAGE_CONTAINER_NAME" \
+            --name "$ARTIFACT_NAME" \
+            --file "$ARTIFACT_NAME" \
+            --auth-mode login \
+            --overwrite true
+
+      - name: Download artifact on VM
+        shell: bash
+        run: |
+          OUTPUT=$(az vm run-command invoke \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_VM_NAME" \
+            --command-id RunPowerShellScript \
+            --scripts \
+              "@.azure/scripts/download-frontend-artifact.ps1" \
+            --parameters \
+              "StorageAccountName=$STORAGE_ACCOUNT_NAME" \
+              "ContainerName=$STORAGE_CONTAINER_NAME" \
+              "ArtifactName=$ARTIFACT_NAME" \
+              "DestinationPath=$VM_ARTIFACT_PATH" \
+            --query "value[].message" \
+            --output tsv)
+
+          echo "$OUTPUT"
+
+          if ! echo "$OUTPUT" |
+            grep -q "DOWNLOAD_RESULT=SUCCESS"; then
+            echo "VM artifact download failed."
+            exit 1
+          fi
+
+      - name: Deploy frontend on IIS
+        shell: bash
+        run: |
+          OUTPUT=$(az vm run-command invoke \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_VM_NAME" \
+            --command-id RunPowerShellScript \
+            --scripts \
+              "@.azure/scripts/deploy-frontend.ps1" \
+            --parameters \
+              "ArtifactZipPath=$VM_ARTIFACT_PATH" \
+              "ReleaseId=$RELEASE_SHA" \
+              "SiteName=$IIS_SITE_NAME" \
+            --query "value[].message" \
+            --output tsv)
+
+          echo "$OUTPUT"
+
+          if ! echo "$OUTPUT" |
+            grep -q "DEPLOYMENT_RESULT=SUCCESS"; then
+            echo "Frontend deployment failed."
+            exit 1
+          fi
+
+      - name: Public frontend smoke test
+        shell: bash
+        run: |
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 3 \
+            --retry-delay 3 \
+            https://lvpowerbilineage.com/ \
+            > /dev/null
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 3 \
+            --retry-delay 3 \
+            https://lvpowerbilineage.com/api/v1/health/live \
+            > /dev/null
+
+      - name: Deployment summary
+        shell: bash
+        run: |
+          echo "Frontend deployment successful."
+          echo "Release: $RELEASE_SHA"
+          echo "Artifact: $ARTIFACT_NAME"
