@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@dagrejs/dagre": "^3.1.1",
     "@fontsource-variable/geist": "^5.3.0",
     "@hookform/resolvers": "^5.9.1",
     "@react-router/node": "^8",
@@ -45,7 +46,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "jsdom": "^30.0.1",
-    "orval": "^7.11.2",
+    "orval": "^8.31.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
     "vite": "^8.0.3",

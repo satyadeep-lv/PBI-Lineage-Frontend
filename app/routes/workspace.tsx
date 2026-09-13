@@ -28,6 +28,15 @@ const Explorer = lazy(() =>
 const ReportLineage = lazy(() =>
   import("~/components/workspace/report-lineage").then((module) => ({ default: module.ReportLineage })),
 );
+const TableImpact = lazy(() =>
+  import("~/components/workspace/table-impact").then((module) => ({ default: module.TableImpact })),
+);
+const MeasureImpact = lazy(() =>
+  import("~/components/workspace/measure-impact").then((module) => ({ default: module.MeasureImpact })),
+);
+const Scanner = lazy(() =>
+  import("~/components/workspace/scanner").then((module) => ({ default: module.Scanner })),
+);
 
 export function meta({}: Route.MetaArgs) {
   return [{ title: "Workspace | PBI Lineage Explorer" }];
@@ -132,6 +141,18 @@ export default function Workspace() {
           ) : activeSection === "report-lineage" ? (
             <Suspense fallback={<ExplorerLoading />}>
               <ReportLineage />
+            </Suspense>
+          ) : activeSection === "table-impact" ? (
+            <Suspense fallback={<ExplorerLoading />}>
+              <TableImpact />
+            </Suspense>
+          ) : activeSection === "measure-impact" ? (
+            <Suspense fallback={<ExplorerLoading />}>
+              <MeasureImpact />
+            </Suspense>
+          ) : activeSection === "scanner" ? (
+            <Suspense fallback={<ExplorerLoading />}>
+              <Scanner />
             </Suspense>
           ) : (
             <ApiDocumentation

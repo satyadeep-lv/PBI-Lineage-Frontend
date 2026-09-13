@@ -6,11 +6,8 @@ import {
   type ColDef,
   type ICellRendererParams,
 } from "ag-grid-community";
-import { Background, Controls, ReactFlow, type Edge, type Node } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import {
-  AlertCircle,
   BookOpenCheck,
   Boxes,
   CheckCircle2,
@@ -25,7 +22,7 @@ import {
   Layers3,
   Loader2,
   Network,
-  ShieldCheck,
+  Radar,
   TableProperties,
   UsersRound,
 } from "lucide-react";
@@ -33,7 +30,13 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { PowerBiAuthRequired } from "~/components/workspace/auth-required";
+import { LineageDiagram } from "~/components/workspace/lineage/lineage-diagram";
+import type { LineageGraph } from "~/components/workspace/lineage/lineage-types";
+import { closureToLineageGraph, computeDependencyClosure, referenceKey, type DaxReference as DependencyDaxReference } from "~/lib/dependency-graph";
 import { readJsonResponse } from "~/lib/api-catalog";
+import { DEFAULT_SCAN_FLAGS, workspacePayload, type ScannerWorkspace } from "~/lib/scanner-api";
+import { useWorkspaceScan } from "~/lib/use-workspace-scan";
 import { cn } from "~/lib/utils";
 import { useAppStore } from "~/stores/app-store";
 
@@ -183,8 +186,8 @@ type ReportPagesResponse = { pages: ReportPage[] };
 
 const tabs: Array<{ id: ExplorerTab; label: string; shortLabel: string }> = [
   { id: "assets", label: "1. Reports, dashboards, apps, and access", shortLabel: "Assets & access" },
-  { id: "report-detail", label: "2. Report and source details", shortLabel: "Report detail" },
-  { id: "report-semantic", label: "3. Report-specific semantic lineage", shortLabel: "Report semantic" },
+  { id: "report-detail", label: "2. Report page details", shortLabel: "Page details" },
+  { id: "report-semantic", label: "3. Report visual field lineage", shortLabel: "Report visuals" },
   { id: "semantic-objects", label: "4. Semantic model objects", shortLabel: "Semantic objects" },
   { id: "column-mapping", label: "5. Database column to semantic mapping", shortLabel: "Column mapping" },
 ];
@@ -204,6 +207,7 @@ export function Explorer() {
   });
   const workspaces = workspacesQuery.data?.workspaces ?? [];
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null;
+  const scan = useWorkspaceScan(apiOrigin, selectedWorkspace ? [selectedWorkspace.id] : [], DEFAULT_SCAN_FLAGS);
 
   useEffect(() => {
     if (workspaces.length && !workspaces.some((workspace) => workspace.id === selectedWorkspaceId)) {
@@ -310,7 +314,7 @@ export function Explorer() {
   );
 
   if (workspacesQuery.isLoading) return <ExplorerLoading label="Loading Power BI workspaces" />;
-  if (workspacesQuery.isError) return <ExplorerUnavailable error={workspacesQuery.error} />;
+  if (workspacesQuery.isError) return <PowerBiAuthRequired returnTo="Explorer" />;
   if (!workspaces.length) return <ExplorerEmpty title="No Power BI workspaces found" text="The authenticated account did not return any workspaces to explore." />;
 
   return (
@@ -320,7 +324,7 @@ export function Explorer() {
           <div className="flex items-start gap-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-[8px] bg-teal-700 text-white"><Network className="size-5" /></span>
             <div>
-              <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-teal-700">Power BI estate</span><Badge className="rounded-[8px] border border-teal-200 bg-teal-50 text-teal-800">Name-based explorer</Badge></div>
+              <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-teal-700">Power BI</span><Badge className="rounded-[8px] border border-teal-200 bg-teal-50 text-teal-800">Name-based explorer</Badge></div>
               <h1 className="text-lg font-semibold">Explorer</h1>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">Choose a workspace and report by name, then follow the tabs to understand report pages, model objects, and source-column evidence.</p>
             </div>
@@ -328,10 +332,9 @@ export function Explorer() {
           <NameSelector id="explorer-workspace" label="Workspace" items={workspaces} selectedId={selectedWorkspaceId} onChange={setSelectedWorkspaceId} />
         </div>
         {backgroundPreparing && <BackgroundPreparation reportName={selectedReport?.name ?? "selected report"} />}
-        <div className="mt-5 grid grid-cols-3 divide-x divide-zinc-200 border-y border-zinc-200 sm:max-w-xl">
+        <div className="mt-5 grid grid-cols-2 divide-x divide-zinc-200 border-y border-zinc-200 sm:max-w-sm">
           <ExplorerMetric label="Reports" value={reports.length} icon={<FileBarChart2 className="size-4" />} />
           <ExplorerMetric label="Semantic models" value={semanticModels.length} icon={<Layers3 className="size-4" />} />
-          <ExplorerMetric label="Workspace" value={selectedWorkspace?.is_read_only ? "Read-only" : "Editable"} icon={<ShieldCheck className="size-4" />} />
         </div>
       </div>
 
@@ -343,7 +346,7 @@ export function Explorer() {
       </div>
 
       <div className="p-5 sm:p-6">
-        {activeTab === "assets" && <AssetsAccessTab workspace={selectedWorkspace} reports={reports} semanticModels={semanticModels} isLoading={reportsQuery.isLoading || semanticModelsQuery.isLoading} error={reportsQuery.error ?? semanticModelsQuery.error} onReportSelect={(reportId) => { setSelectedReportId(reportId); setActiveTab("report-detail"); }} onSemanticModelSelect={(modelId) => { setSelectedSemanticModelId(modelId); setActiveTab("semantic-objects"); }} />}
+        {activeTab === "assets" && <AssetsAccessTab workspace={selectedWorkspace} reports={reports} semanticModels={semanticModels} isLoading={reportsQuery.isLoading || semanticModelsQuery.isLoading} error={reportsQuery.error ?? semanticModelsQuery.error} scan={scan} onReportSelect={(reportId) => { setSelectedReportId(reportId); setActiveTab("report-detail"); }} onSemanticModelSelect={(modelId) => { setSelectedSemanticModelId(modelId); setActiveTab("semantic-objects"); }} />}
         {activeTab === "report-detail" && <ReportDetailTab workspace={selectedWorkspace} reports={reports} selectedReport={selectedReport} reportSemanticModel={reportSemanticModel} onReportChange={setSelectedReportId} detailQuery={reportDetailQuery} pagesQuery={reportPagesQuery} />}
         {activeTab === "report-semantic" && <ReportSemanticTab workspace={selectedWorkspace} reports={reports} selectedReport={selectedReport} reportSemanticModel={reportSemanticModel} onReportChange={setSelectedReportId} normalizedQuery={normalizedReportQuery} lineageQuery={reportSemanticLineageQuery} parsed={parsedSemanticModelQuery.data} daxQuery={daxQuery} />}
         {activeTab === "semantic-objects" && <SemanticObjectsTab workspace={selectedWorkspace} selectedReport={selectedReport} semanticModels={semanticModels} selectedSemanticModel={selectedSemanticModel} onSemanticModelChange={setSelectedSemanticModelId} parsedQuery={parsedSemanticModelQuery} daxQuery={daxQuery} metadataQuery={semanticMetadataQuery} />}
@@ -365,12 +368,13 @@ function BackgroundPreparation({ reportName }: { reportName: string }) {
   return <div className="mt-4 flex items-start gap-2 border border-sky-200 bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-950"><Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin" /><span>Preparing report, semantic, and DAX details for <strong>{reportName}</strong> in the background. You can keep exploring while this completes.</span></div>;
 }
 
-function AssetsAccessTab({ workspace, reports, semanticModels, isLoading, error, onReportSelect, onSemanticModelSelect }: {
+function AssetsAccessTab({ workspace, reports, semanticModels, isLoading, error, scan, onReportSelect, onSemanticModelSelect }: {
   workspace: Workspace | null;
   reports: Report[];
   semanticModels: SemanticModel[];
   isLoading: boolean;
   error: Error | null;
+  scan: ReturnType<typeof useWorkspaceScan>;
   onReportSelect: (id: string) => void;
   onSemanticModelSelect: (id: string) => void;
 }) {
@@ -382,7 +386,63 @@ function AssetsAccessTab({ workspace, reports, semanticModels, isLoading, error,
   return <div className="space-y-8">
     <div><SectionHeading icon={<Files className="size-5" />} title="Reports" text="Select a report by name to inspect its pages, report structure, and semantic lineage." /><ExplorerGrid rowData={reportRows} columnDefs={[{ field: "name", headerName: "Report name", minWidth: 230, flex: 1.4 }, { field: "type", headerName: "Type", minWidth: 120 }, { field: "semanticModel", headerName: "Semantic model", minWidth: 220, flex: 1.2 }, { field: "format", headerName: "Format", minWidth: 120 }, { field: "access", headerName: "Access", minWidth: 110 }]} onRowClick={(row) => onReportSelect(row.id)} emptyMessage="No reports were returned for this workspace." exportFileName={`${filePart(workspace?.name)}-reports`} exportContext={makeExportContext(workspace)} /></div>
     <div><SectionHeading icon={<Layers3 className="size-5" />} title="Semantic models" text="These models resolve report field references and detailed object metadata." /><ExplorerGrid rowData={modelRows} columnDefs={[{ field: "name", headerName: "Model name", minWidth: 260, flex: 1.5 }, { field: "storage", headerName: "Storage mode", minWidth: 160 }, { field: "refresh", headerName: "Refresh", minWidth: 140 }, { field: "gateway", headerName: "Gateway", minWidth: 140 }]} onRowClick={(row) => onSemanticModelSelect(row.id)} emptyMessage="No semantic models were returned for this workspace." exportFileName={`${filePart(workspace?.name)}-semantic-models`} exportContext={makeExportContext(workspace)} /></div>
-    <div className="grid border-y border-zinc-200 md:grid-cols-3"><AvailabilityNotice icon={<FileBarChart2 className="size-5" />} title="Dashboards" text="Dashboard inventory is not exposed by the current backend API." /><AvailabilityNotice icon={<Boxes className="size-5" />} title="Apps" text="Power BI app inventory is not exposed by the current backend API." /><AvailabilityNotice icon={<UsersRound className="size-5" />} title="Object access" text="Per-user and per-object access details are not exposed by the current backend API." /></div>
+    <ScannerEvidencePanel workspace={workspace} scan={scan} />
+  </div>;
+}
+
+function ScannerEvidencePanel({ workspace, scan }: { workspace: Workspace | null; scan: ReturnType<typeof useWorkspaceScan> }) {
+  const status = scan.status;
+  const isRunning = Boolean(scan.scanId) && status !== "Succeeded" && status !== "Failed";
+  const payload = status === "Succeeded" && workspace ? workspacePayload(scan.resultQuery.data, workspace.id) : undefined;
+
+  return <div className="space-y-6">
+    <div className="flex flex-wrap items-center justify-between gap-3 border-y border-zinc-200 bg-zinc-50 px-4 py-3">
+      <div>
+        <p className="text-sm font-semibold">Dashboards, app linkage, and ownership</p>
+        <p className="mt-0.5 text-xs leading-5 text-zinc-500">Runs the Power BI Admin scanner for this workspace only. Subject to the tenant's hourly scan limits — run it deliberately, not repeatedly.</p>
+      </div>
+      <Button type="button" variant="outline" size="sm" disabled={!workspace || isRunning} onClick={scan.runScan}>
+        {isRunning ? <Loader2 className="size-3.5 animate-spin" /> : <Radar className="size-3.5" />} {scan.scanId && status === "Succeeded" ? "Run scan again" : "Run metadata scan"}
+      </Button>
+    </div>
+
+    {isRunning && <div className="flex items-center gap-2 border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900"><Loader2 className="size-3.5 animate-spin" />Scanning ({status ?? "starting"})...</div>}
+    {status === "Failed" && <div className="border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">{scan.statusError?.message ?? "The metadata scan failed."}</div>}
+    {scan.isStatusUnavailable && <div className="border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">Scan status could not be checked. Confirm the scanner API is reachable for this session.</div>}
+
+    {!payload
+      ? <div className="grid border-y border-zinc-200 md:grid-cols-3">
+          <AvailabilityNotice icon={<FileBarChart2 className="size-5" />} title="Dashboards" text="Run a scan above to see this workspace's dashboards." />
+          <AvailabilityNotice icon={<Boxes className="size-5" />} title="App linkage" text="Run a scan above to see which Power BI apps reference this workspace's content." />
+          <AvailabilityNotice icon={<UsersRound className="size-5" />} title="Ownership" text="Run a scan above to see report and dataset creators and last editors." />
+        </div>
+      : <ScannerEvidenceResults workspace={payload} exportContext={makeExportContext(workspace)} />}
+  </div>;
+}
+
+function ScannerEvidenceResults({ workspace, exportContext }: { workspace: ScannerWorkspace; exportContext: ExportContext }) {
+  const dashboardRows: ExplorerGridRow[] = (workspace.dashboards ?? []).map((dashboard) => ({ id: dashboard.id, name: dashboard.displayName, tiles: dashboard.tiles?.length ?? 0, readOnly: dashboard.isReadOnly ? "Read-only" : "Editable", app: dashboard.appId ?? "--" }));
+  const appIds = Array.from(new Set([...(workspace.reports ?? []).map((report) => report.appId), ...(workspace.dashboards ?? []).map((dashboard) => dashboard.appId)].filter((id): id is string => Boolean(id))));
+  const ownershipRows: ExplorerGridRow[] = [
+    ...(workspace.reports ?? []).map((report) => ({ id: `report-${report.id}`, kind: "Report", name: report.name, owner: report.modifiedBy ?? report.createdBy ?? "--" })),
+    ...(workspace.datasets ?? []).map((dataset) => ({ id: `dataset-${dataset.id}`, kind: "Semantic model", name: dataset.name, owner: dataset.configuredBy ?? "--" })),
+  ];
+
+  return <div className="space-y-8">
+    <div>
+      <SectionHeading icon={<FileBarChart2 className="size-5" />} title="Dashboards" text="Every dashboard the scanner found in this workspace." />
+      <ExplorerGrid rowData={dashboardRows} columnDefs={[{ field: "name", headerName: "Dashboard", minWidth: 230, flex: 1.4 }, { field: "tiles", headerName: "Tiles", minWidth: 100 }, { field: "readOnly", headerName: "Access", minWidth: 120 }, { field: "app", headerName: "Linked app ID", minWidth: 260, flex: 1 }]} emptyMessage="No dashboards were found in this workspace." exportFileName={`${filePart(workspace.name)}-dashboards`} exportContext={exportContext} />
+    </div>
+    <div>
+      <SectionHeading icon={<Boxes className="size-5" />} title="App linkage" text="Apps that reference this workspace's content, by ID. The scanner does not return app display names." />
+      {appIds.length
+        ? <ul className="mt-3 flex flex-wrap gap-2">{appIds.map((id) => <li key={id} className="break-all border border-zinc-200 bg-zinc-50 px-2.5 py-1 font-mono text-xs text-zinc-700">{id}</li>)}</ul>
+        : <p className="mt-3 text-sm text-zinc-500">No app-linked content was found in this workspace.</p>}
+    </div>
+    <div>
+      <SectionHeading icon={<UsersRound className="size-5" />} title="Ownership" text="Reports and semantic models, with their creator, last editor, or configuring identity." />
+      <ExplorerGrid rowData={ownershipRows} columnDefs={[{ field: "kind", headerName: "Type", minWidth: 150 }, { field: "name", headerName: "Name", minWidth: 220, flex: 1 }, { field: "owner", headerName: "Owner", minWidth: 260, flex: 1 }]} emptyMessage="No ownership evidence was found in this workspace." exportFileName={`${filePart(workspace.name)}-ownership`} exportContext={exportContext} />
+    </div>
   </div>;
 }
 
@@ -400,7 +460,7 @@ function ReportDetailTab({ workspace, reports, selectedReport, reportSemanticMod
   const context = makeExportContext(workspace, selectedReport, reportSemanticModel);
   return <div className="space-y-6">
     <ReportSelector reports={reports} selectedReport={selectedReport} onChange={onReportChange} />
-    <SectionHeading icon={<FileBarChart2 className="size-5" />} title="Report detail" text="Each report is read individually so page information is ready before semantic and source evidence is reviewed." />
+    <SectionHeading icon={<FileBarChart2 className="size-5" />} title="Report page details" text="Each report is read individually so page information is ready before semantic and source evidence is reviewed." />
     {detailQuery.isLoading || pagesQuery.isLoading ? <ExplorerLoading label="Loading selected report and pages" /> : null}
     {detailQuery.isError || pagesQuery.isError ? <ExplorerError text="Selected report details are unavailable for this workspace." /> : null}
     {detailQuery.data && <div className="grid border-y border-zinc-200 md:grid-cols-4"><DetailItem label="Report type" value={detailQuery.data.report_type ?? "Not reported"} /><DetailItem label="Format" value={detailQuery.data.format ?? "Not reported"} /><DetailItem label="Linked model" value={reportSemanticModel?.name ?? "Not reported"} /><DetailItem label="Pages" value={String(pages.length)} /></div>}
@@ -426,7 +486,7 @@ function ReportSemanticTab({ workspace, reports, selectedReport, reportSemanticM
   });
   return <div className="space-y-6">
     <ReportSelector reports={reports} selectedReport={selectedReport} onChange={onReportChange} />
-    <SectionHeading icon={<BookOpenCheck className="size-5" />} title="Report-specific semantic lineage" text="This matches fields used in a report's visuals to the linked semantic model, including the DAX expression when that object is calculated." />
+    <SectionHeading icon={<BookOpenCheck className="size-5" />} title="Report visual lineage" text="This matches fields used in a report's visuals to the linked semantic model, including the DAX expression when that object is calculated." />
     {!reportSemanticModel && <ExplorerError text="This report does not resolve to a semantic model in the selected workspace. Composite reports can use a model in another workspace, which needs to be selected separately." />}
     {reportSemanticModel && <div className="border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">Linked semantic model: <strong>{reportSemanticModel.name}</strong></div>}
     {normalizedQuery.isLoading || lineageQuery.isLoading ? <ExplorerLoading label="Reading report definition and semantic field matches" /> : null}
@@ -473,8 +533,6 @@ function ColumnMappingTab({ workspace, selectedReport, semanticModels, selectedS
   const [selectedTableName, setSelectedTableName] = useState("");
   const [selectedColumnName, setSelectedColumnName] = useState("");
   const [selectedMeasureName, setSelectedMeasureName] = useState("");
-  const [columnDepth, setColumnDepth] = useState(2);
-  const [measureDepth, setMeasureDepth] = useState(2);
   const tables = parsedQuery.data?.tables ?? [];
 
   useEffect(() => {
@@ -510,7 +568,7 @@ function ColumnMappingTab({ workspace, selectedReport, semanticModels, selectedS
     {parsedQuery.isError ? <ExplorerError text="Semantic definition retrieval is unavailable for the selected model." /> : null}
     {daxQuery.isLoading && parsedQuery.data ? <ExplorerLoading label="Finding DAX expressions that use each column" compact /> : null}
     {daxQuery.isError && parsedQuery.data ? <DaxUnavailable /> : null}
-    {parsedQuery.data && <><div className="grid gap-4 border-y border-zinc-200 py-4 md:grid-cols-3"><LineageSelect id="lineage-table" label="Semantic table" value={selectedTableName} options={tables.map((table) => table.name)} onChange={setSelectedTableName} /><LineageSelect id="lineage-column" label="Column" value={selectedColumnName} options={selectedTable?.columns.map((column) => column.name) ?? []} onChange={setSelectedColumnName} /><DepthSelector id="column-lineage-depth" value={columnDepth} onChange={setColumnDepth} /></div>{selectedTable && selectedColumn && <ColumnLineageDiagram parsed={parsedQuery.data} table={selectedTable} column={selectedColumn} dax={daxQuery.data} depth={columnDepth} />}{selectedTable && <div className="space-y-4 border-t border-zinc-200 pt-6"><SectionHeading icon={<TableProperties className="size-5" />} title="Measure-level lineage" text="Select the target measure to see the columns and measures used to calculate it, followed by measures that depend on it." /><div className="grid gap-4 md:grid-cols-2"><LineageSelect id="lineage-measure" label="Target measure" value={selectedMeasureName} options={selectedTable.measures.map((measure) => measure.name)} onChange={setSelectedMeasureName} /><DepthSelector id="measure-lineage-depth" value={measureDepth} onChange={setMeasureDepth} /></div>{selectedMeasure ? <MeasureLineageDiagram parsed={parsedQuery.data} table={selectedTable} measure={selectedMeasure} dax={daxQuery.data} depth={measureDepth} /> : <div className="border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-600">No measures were returned for the selected semantic table.</div>}</div>}<ExplorerGrid rowData={mappingRows} columnDefs={[{ field: "sourceColumn", headerName: "Database column", minWidth: 230, flex: 1 }, { field: "semanticTable", headerName: "Semantic table", minWidth: 190 }, { field: "semanticColumn", headerName: "Semantic column", minWidth: 190 }, { field: "dataType", headerName: "Data type", minWidth: 130 }, { field: "daxUsedBy", headerName: "Used by DAX", minWidth: 220 }, daxColumn("daxExpressions", "DAX expression using column"), { field: "evidence", headerName: "Definition evidence", minWidth: 240, flex: 1 }]} emptyMessage="No source-column mappings were found in the semantic definition." exportFileName={`${filePart(selectedSemanticModel?.name)}-${filePart(selectedTableName)}-column-mapping`} exportContext={context} /></>}
+    {parsedQuery.data && <><div className="grid gap-4 border-y border-zinc-200 py-4 md:grid-cols-2"><LineageSelect id="lineage-table" label="Semantic table" value={selectedTableName} options={tables.map((table) => table.name)} onChange={setSelectedTableName} /><LineageSelect id="lineage-column" label="Column" value={selectedColumnName} options={selectedTable?.columns.map((column) => column.name) ?? []} onChange={setSelectedColumnName} /></div>{selectedTable && selectedColumn && <ColumnLineageDiagram parsed={parsedQuery.data} table={selectedTable} column={selectedColumn} dax={daxQuery.data} />}{selectedTable && <div className="space-y-4 border-t border-zinc-200 pt-6"><SectionHeading icon={<TableProperties className="size-5" />} title="Measure-level lineage" text="Select the target measure to see the columns and measures used to calculate it, followed by measures that depend on it." /><div className="max-w-sm"><LineageSelect id="lineage-measure" label="Target measure" value={selectedMeasureName} options={selectedTable.measures.map((measure) => measure.name)} onChange={setSelectedMeasureName} /></div>{selectedMeasure ? <MeasureLineageDiagram parsed={parsedQuery.data} table={selectedTable} measure={selectedMeasure} dax={daxQuery.data} /> : <div className="border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-600">No measures were returned for the selected semantic table.</div>}</div>}<ExplorerGrid rowData={mappingRows} columnDefs={[{ field: "sourceColumn", headerName: "Database column", minWidth: 230, flex: 1 }, { field: "semanticTable", headerName: "Semantic table", minWidth: 190 }, { field: "semanticColumn", headerName: "Semantic column", minWidth: 190 }, { field: "dataType", headerName: "Data type", minWidth: 130 }, { field: "daxUsedBy", headerName: "Used by DAX", minWidth: 220 }, daxColumn("daxExpressions", "DAX expression using column"), { field: "evidence", headerName: "Definition evidence", minWidth: 240, flex: 1 }]} emptyMessage="No source-column mappings were found in the semantic definition." exportFileName={`${filePart(selectedSemanticModel?.name)}-${filePart(selectedTableName)}-column-mapping`} exportContext={context} /></>}
     {physicalSourceQuery.isLoading ? <ExplorerLoading label="Analyzing physical source evidence" compact /> : null}
     {physicalSourceQuery.data && <div><SectionHeading icon={<Database className="size-5" />} title="Detected physical sources" text="Physical provider, database, and object details discovered from semantic partitions." /><ExplorerGrid rowData={sourceRows} columnDefs={[{ field: "provider", headerName: "Provider", minWidth: 180 }, { field: "location", headerName: "Database object", minWidth: 300, flex: 1 }, { field: "kind", headerName: "Kind", minWidth: 140 }]} emptyMessage="No physical sources were detected." exportFileName={`${filePart(selectedSemanticModel?.name)}-physical-sources`} exportContext={context} /></div>}
     {physicalSourceQuery.isError && parsedQuery.data && <div className="border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">Physical-source analysis is not enabled for this session. The source-column and DAX evidence above is still available.</div>}
@@ -521,176 +579,66 @@ function LineageSelect({ id, label, value, options, onChange }: { id: string; la
   return <div className="space-y-1.5"><label className="text-xs font-semibold text-zinc-600" htmlFor={id}>{label}</label><select id={id} value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100"><option value="" disabled>Select a {label.toLowerCase()}</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></div>;
 }
 
-function DepthSelector({ id, value, onChange }: { id: string; value: number; onChange: (value: number) => void }) {
-  return <div className="space-y-1.5"><label className="text-xs font-semibold text-zinc-600" htmlFor={id}>Lineage depth</label><select id={id} value={value} onChange={(event) => onChange(Number(event.target.value))} className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100">{[1, 2, 3, 4, 5, 6].map((depth) => <option key={depth} value={depth}>{depth} {depth === 1 ? "level" : "levels"}</option>)}</select></div>;
+function ColumnLineageDiagram({ parsed, table, column, dax }: { parsed: ParsedSemanticModel; table: ParsedTable; column: ParsedColumn; dax: DaxAnalysis | undefined }) {
+  const graph = useMemo(() => buildColumnLineage(parsed, table, column, dax), [column, dax, parsed, table]);
+  const focusNodeId = referenceKey({ object_type: column.expression ? "calculated_column" : "column", table_name: table.name, object_name: column.name, qualified_name: "" });
+  return <LineageDiagram direction="TB" graph={graph} focusNodeId={focusNodeId} title="Column-level lineage" description={`${table.name}[${column.name}] from source evidence through DAX calculations.`} emptyText="No column lineage could be prepared for the selected field." />;
 }
 
-function ColumnLineageDiagram({ parsed, table, column, dax, depth }: { parsed: ParsedSemanticModel; table: ParsedTable; column: ParsedColumn; dax: DaxAnalysis | undefined; depth: number }) {
-  const graph = useMemo(() => buildColumnLineage(parsed, table, column, dax, depth), [column, dax, depth, parsed, table]);
-  return <LineageCanvas title="Column-level lineage" description={`${table.name}[${column.name}] from source evidence through DAX calculations.`} graph={graph} emptyText="No column lineage could be prepared for the selected field." />;
+function MeasureLineageDiagram({ parsed, table, measure, dax }: { parsed: ParsedSemanticModel; table: ParsedTable; measure: ParsedTable["measures"][number]; dax: DaxAnalysis | undefined }) {
+  const graph = useMemo(() => buildMeasureLineage(parsed, table, measure, dax), [dax, measure, parsed, table]);
+  const focusNodeId = referenceKey({ object_type: "measure", table_name: table.name, object_name: measure.name, qualified_name: "" });
+  return <LineageDiagram direction="LR" graph={graph} focusNodeId={focusNodeId} title="Measure-level lineage" description={`${table.name}[${measure.name}] is the target measure. Its calculation inputs and dependent measures are shown in full.`} emptyText="No measure lineage could be prepared for the selected measure." />;
 }
 
-function MeasureLineageDiagram({ parsed, table, measure, dax, depth }: { parsed: ParsedSemanticModel; table: ParsedTable; measure: ParsedTable["measures"][number]; dax: DaxAnalysis | undefined; depth: number }) {
-  const graph = useMemo(() => buildMeasureLineage(parsed, table, measure, dax, depth), [dax, depth, measure, parsed, table]);
-  return <LineageCanvas title="Measure-level lineage" description={`${table.name}[${measure.name}] is the target measure. Its calculation inputs and dependent measures are shown to the selected depth.`} graph={graph} emptyText="No measure lineage could be prepared for the selected measure." />;
-}
-
-type LineageGraph = { nodes: Node[]; edges: Edge[] };
-
-function LineageCanvas({ title, description, graph, emptyText }: { title: string; description: string; graph: LineageGraph; emptyText: string }) {
-  return <div className="border border-zinc-200 bg-white"><div className="border-b border-zinc-200 px-4 py-3"><h3 className="text-sm font-semibold">{title}</h3><p className="mt-1 text-xs leading-5 text-zinc-500">{description}</p></div><div className="h-[520px] min-h-[420px]">{graph.nodes.length ? <ReactFlow nodes={graph.nodes} edges={graph.edges} fitView fitViewOptions={{ padding: 0.2 }} nodesDraggable={false} nodesConnectable={false} elementsSelectable zoomOnDoubleClick={false} defaultEdgeOptions={{ type: "smoothstep" }}><Background gap={18} size={1} /><Controls showInteractive={false} /></ReactFlow> : <div className="flex h-full items-center justify-center p-6 text-sm text-zinc-500">{emptyText}</div>}</div></div>;
-}
-
-function buildColumnLineage(parsed: ParsedSemanticModel, table: ParsedTable, column: ParsedColumn, dax: DaxAnalysis | undefined, depth: number): LineageGraph {
+function buildColumnLineage(parsed: ParsedSemanticModel, table: ParsedTable, column: ParsedColumn, dax: DaxAnalysis | undefined): LineageGraph {
   const dependencies = dax?.dependencies ?? [];
   const expressionIndex = buildExpressionIndex(parsed);
-  const rootKey = objectKey(table.name, column.name);
-  const rootId = `semantic-${lineageId(rootKey)}`;
-  const sourceId = `source-${lineageId(rootKey)}`;
+  const seed: DependencyDaxReference = { object_type: column.expression ? "calculated_column" : "column", table_name: table.name, object_name: column.name, qualified_name: `${table.name}[${column.name}]` };
+  const rootId = referenceKey(seed);
+  const closure = computeDependencyClosure(dependencies, [seed]);
+  const graph = closureToLineageGraph({ seeds: [seed], upstream: [], downstream: closure.downstream }, dependencies);
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+
+  const rootNode = nodeById.get(rootId);
+  if (rootNode) rootNode.detail = column.expression ?? "Semantic column";
+  closure.downstream.forEach((hop) => {
+    const node = nodeById.get(referenceKey(hop.reference));
+    if (node) node.detail = expressionIndex.get(objectKey(hop.reference.table_name, hop.reference.object_name)) ?? `DAX ${hop.reference.object_type}`;
+  });
+
+  const sourceId = `source-${rootId}`;
   const sourceLabel = [
     column.source_column ? `Column: ${column.source_column}` : null,
     column.source_path ? `Path: ${column.source_path}` : null,
   ].filter(Boolean).join(" | ") || "Source column not declared";
-  const nodes: Node[] = [
-    lineageNode(sourceId, "Source evidence", sourceLabel, { x: 410, y: 0 }, "source"),
-    lineageNode(rootId, `${table.name}[${column.name}]`, column.expression ?? "Semantic column", { x: 410, y: 150 }, "semantic"),
-  ];
-  const edges: Edge[] = [lineageEdge(`${sourceId}-${rootId}`, sourceId, rootId, "maps to")];
-  const nodeIds = new Map<string, string>([[rootKey, rootId]]);
-  let currentKeys = [rootKey];
-  let edgeIndex = 0;
+  graph.nodes.push({ id: sourceId, kind: "database-source", label: "Source evidence", detail: sourceLabel });
+  graph.edges.push({ id: `${sourceId}-${rootId}`, source: sourceId, target: rootId, label: "maps to" });
 
-  for (let level = 1; level <= depth && currentKeys.length; level += 1) {
-    const next = new Map<string, DaxReference>();
-    const pendingEdges: Array<{ sourceKey: string; target: DaxReference; reference: string }> = [];
-    currentKeys.forEach((currentKey) => {
-      dependencies.filter((edge) => objectKey(edge.source.table_name, edge.source.object_name) === currentKey).forEach((edge) => {
-        const targetKey = objectKey(edge.target.table_name, edge.target.object_name);
-        next.set(targetKey, edge.target);
-        pendingEdges.push({ sourceKey: currentKey, target: edge.target, reference: edge.reference_text });
-      });
-    });
-
-    const positions = lineageLayerPositions([...next.keys()], 150 + level * 170);
-    next.forEach((reference, key) => {
-      if (!nodeIds.has(key)) {
-        const nodeId = `dax-${lineageId(key)}`;
-        nodeIds.set(key, nodeId);
-        nodes.push(lineageNode(nodeId, reference.qualified_name, expressionIndex.get(key) ?? `DAX ${reference.object_type}`, positions.get(key) ?? { x: 410, y: 150 + level * 170 }, "dax"));
-      }
-    });
-    pendingEdges.forEach(({ sourceKey, target, reference }) => {
-      const targetKey = objectKey(target.table_name, target.object_name);
-      const sourceNodeId = nodeIds.get(sourceKey);
-      const targetNodeId = nodeIds.get(targetKey);
-      if (sourceNodeId && targetNodeId) edges.push(lineageEdge(`column-edge-${edgeIndex++}`, sourceNodeId, targetNodeId, reference));
-    });
-    currentKeys = [...next.keys()];
-  }
-
-  return { nodes, edges };
+  return graph;
 }
 
-function buildMeasureLineage(parsed: ParsedSemanticModel, table: ParsedTable, measure: ParsedTable["measures"][number], dax: DaxAnalysis | undefined, depth: number): LineageGraph {
+function buildMeasureLineage(parsed: ParsedSemanticModel, table: ParsedTable, measure: ParsedTable["measures"][number], dax: DaxAnalysis | undefined): LineageGraph {
   const dependencies = dax?.dependencies ?? [];
   const expressionIndex = buildExpressionIndex(parsed);
-  const rootKey = objectKey(table.name, measure.name);
-  const rootId = `measure-${lineageId(rootKey)}`;
-  const nodes: Node[] = [lineageNode(rootId, `${table.name}[${measure.name}]`, measure.expression ?? "Target measure", { x: 410, y: 0 }, "measure")];
-  const edges: Edge[] = [];
-  const nodeIds = new Map<string, string>([[rootKey, rootId]]);
-  let edgeIndex = 0;
+  const seed: DependencyDaxReference = { object_type: "measure", table_name: table.name, object_name: measure.name, qualified_name: `${table.name}[${measure.name}]` };
+  const rootId = referenceKey(seed);
+  const closure = computeDependencyClosure(dependencies, [seed]);
+  const graph = closureToLineageGraph(closure, dependencies);
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
 
-  let upstreamCurrent = [rootKey];
-  let upstreamLevels = 0;
-  for (let level = 1; level <= depth && upstreamCurrent.length; level += 1) {
-    const next = new Map<string, DaxReference>();
-    const pendingEdges: Array<{ source: DaxReference; targetKey: string; reference: string }> = [];
-    upstreamCurrent.forEach((currentKey) => {
-      dependencies.filter((edge) => objectKey(edge.target.table_name, edge.target.object_name) === currentKey).forEach((edge) => {
-        const sourceKey = objectKey(edge.source.table_name, edge.source.object_name);
-        next.set(sourceKey, edge.source);
-        pendingEdges.push({ source: edge.source, targetKey: currentKey, reference: edge.reference_text });
-      });
-    });
-    if (!next.size) break;
-    upstreamLevels = level;
-    const positions = lineageLayerPositions([...next.keys()], 150 + (level - 1) * 170);
-    next.forEach((reference, key) => {
-      if (!nodeIds.has(key)) {
-        const nodeId = `${lineageTone(reference) === "measure" ? "measure" : "semantic"}-${lineageId(key)}`;
-        nodeIds.set(key, nodeId);
-        nodes.push(lineageNode(nodeId, reference.qualified_name, expressionIndex.get(key) ?? `${reference.object_type} source`, positions.get(key) ?? { x: 410, y: 150 + (level - 1) * 170 }, lineageTone(reference)));
-      }
-    });
-    pendingEdges.forEach(({ source, targetKey, reference }) => {
-      const sourceNodeId = nodeIds.get(objectKey(source.table_name, source.object_name));
-      const targetNodeId = nodeIds.get(targetKey);
-      if (sourceNodeId && targetNodeId) edges.push(lineageEdge(`measure-source-${edgeIndex++}`, sourceNodeId, targetNodeId, reference));
-    });
-    upstreamCurrent = [...next.keys()];
-  }
+  const rootNode = nodeById.get(rootId);
+  if (rootNode) rootNode.detail = measure.expression ?? "Target measure";
+  closure.upstream.forEach((hop) => {
+    const node = nodeById.get(referenceKey(hop.reference));
+    if (node) node.detail = expressionIndex.get(objectKey(hop.reference.table_name, hop.reference.object_name)) ?? `${hop.reference.object_type} source`;
+  });
+  closure.downstream.forEach((hop) => {
+    const node = nodeById.get(referenceKey(hop.reference));
+    if (node) node.detail = expressionIndex.get(objectKey(hop.reference.table_name, hop.reference.object_name)) ?? `DAX ${hop.reference.object_type}`;
+  });
 
-  let downstreamCurrent = [rootKey];
-  const downstreamStart = 150 + Math.max(upstreamLevels, 1) * 170;
-  for (let level = 1; level <= depth && downstreamCurrent.length; level += 1) {
-    const next = new Map<string, DaxReference>();
-    const pendingEdges: Array<{ sourceKey: string; target: DaxReference; reference: string }> = [];
-    downstreamCurrent.forEach((currentKey) => {
-      dependencies.filter((edge) => objectKey(edge.source.table_name, edge.source.object_name) === currentKey).forEach((edge) => {
-        const targetKey = objectKey(edge.target.table_name, edge.target.object_name);
-        next.set(targetKey, edge.target);
-        pendingEdges.push({ sourceKey: currentKey, target: edge.target, reference: edge.reference_text });
-      });
-    });
-    if (!next.size) break;
-    const positions = lineageLayerPositions([...next.keys()], downstreamStart + (level - 1) * 170);
-    next.forEach((reference, key) => {
-      if (!nodeIds.has(key)) {
-        const nodeId = `${lineageTone(reference) === "measure" ? "measure" : "dax"}-${lineageId(key)}`;
-        nodeIds.set(key, nodeId);
-        nodes.push(lineageNode(nodeId, reference.qualified_name, expressionIndex.get(key) ?? `DAX ${reference.object_type}`, positions.get(key) ?? { x: 410, y: downstreamStart + (level - 1) * 170 }, lineageTone(reference)));
-      }
-    });
-    pendingEdges.forEach(({ sourceKey, target, reference }) => {
-      const sourceNodeId = nodeIds.get(sourceKey);
-      const targetNodeId = nodeIds.get(objectKey(target.table_name, target.object_name));
-      if (sourceNodeId && targetNodeId) edges.push(lineageEdge(`measure-dependent-${edgeIndex++}`, sourceNodeId, targetNodeId, reference));
-    });
-    downstreamCurrent = [...next.keys()];
-  }
-
-  return { nodes, edges };
-}
-
-function lineageTone(reference: DaxReference): "semantic" | "dax" | "measure" {
-  if (reference.object_type === "measure") return "measure";
-  if (reference.object_type === "calculated_column" || reference.object_type === "calculated_table") return "dax";
-  return "semantic";
-}
-
-function lineageNode(id: string, title: string, detail: string, position: { x: number; y: number }, tone: "source" | "semantic" | "dax" | "measure") : Node {
-  const tones = {
-    source: { border: "#99f6e4", background: "#f0fdfa", accent: "#0f766e" },
-    semantic: { border: "#bae6fd", background: "#f0f9ff", accent: "#0369a1" },
-    dax: { border: "#fde68a", background: "#fffbeb", accent: "#b45309" },
-    measure: { border: "#c4b5fd", background: "#faf5ff", accent: "#6d28d9" },
-  }[tone];
-  return { id, position, data: { label: <div className="max-w-[220px] text-left"><div className="text-xs font-semibold" style={{ color: tones.accent }}>{title}</div><div className="mt-1 break-words text-[11px] leading-4 text-zinc-600">{abbreviate(detail, 110)}</div></div> }, style: { width: 248, border: `1px solid ${tones.border}`, borderRadius: 6, background: tones.background, padding: 10, boxShadow: "none" } };
-}
-
-function lineageEdge(id: string, source: string, target: string, label: string): Edge {
-  return { id, source, target, label: abbreviate(label, 34), type: "smoothstep", animated: false, style: { stroke: "#64748b" }, labelStyle: { fontSize: 10, fill: "#475569" }, labelBgStyle: { fill: "#ffffff", fillOpacity: 0.92 } };
-}
-
-function lineageLayerPositions(keys: string[], y: number) {
-  const spacing = 276;
-  const start = Math.max(20, 534 - ((keys.length - 1) * spacing) / 2);
-  return new Map(keys.map((key, index) => [key, { x: start + index * spacing, y }]));
-}
-
-function lineageId(value: string) {
-  return value.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
+  return graph;
 }
 
 function NameSelector({ id, label, items, selectedId, onChange }: { id: string; label: string; items: Array<{ id: string; name: string }>; selectedId: string; onChange: (id: string) => void }) {
@@ -893,10 +841,6 @@ function ExplorerEmpty({ title, text }: { title: string; text: string }) {
   return <section className="flex min-h-[560px] items-center justify-center border border-zinc-200 bg-white p-6 text-center"><div className="max-w-md"><Boxes className="mx-auto size-8 text-zinc-300" /><h1 className="mt-4 text-lg font-semibold">{title}</h1><p className="mt-2 text-sm leading-6 text-zinc-500">{text}</p></div></section>;
 }
 
-function ExplorerUnavailable({ error }: { error: Error }) {
-  return <section className="flex min-h-[560px] items-center justify-center border border-zinc-200 bg-white p-6 text-center"><div className="max-w-md"><AlertCircle className="mx-auto size-8 text-amber-500" /><h1 className="mt-4 text-lg font-semibold">Power BI authentication is required</h1><p className="mt-2 text-sm leading-6 text-zinc-500">Complete Power BI setup, approve the Microsoft device code, then return to Explorer to load the estate.</p><a className="mt-5 inline-flex h-8 items-center gap-1.5 rounded-lg bg-zinc-950 px-3 text-sm font-medium text-white hover:bg-zinc-800" href="/workspace/power-bi">Start Power BI setup</a><p className="mt-3 text-xs text-zinc-400">{friendlyError(error)}</p></div></section>;
-}
-
 function ExplorerError({ text }: { text: string }) {
   return <div className="border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">{text}</div>;
 }
@@ -915,8 +859,4 @@ function readError(body: unknown, status: number) {
     if (typeof detail === "string") return detail;
   }
   return `Request failed with status ${status}.`;
-}
-
-function friendlyError(error: Error) {
-  return error.message.includes("401") || error.message.toLowerCase().includes("session") ? "No active Power BI session was found." : "The workspace inventory could not be loaded.";
 }

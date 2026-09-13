@@ -2,7 +2,6 @@ import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, themeQuartz, type ColDef, type ICellRendererParams } from "ag-grid-community";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertCircle,
   BookOpenCheck,
   CheckCircle2,
   ClipboardCopy,
@@ -21,6 +20,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { PowerBiAuthRequired } from "~/components/workspace/auth-required";
 import { ReportLineageDiagrams } from "~/components/workspace/report-lineage-diagrams";
 import { readJsonResponse } from "~/lib/api-catalog";
 import { cn } from "~/lib/utils";
@@ -160,7 +160,7 @@ export function ReportLineage() {
   });
 
   if (estateQuery.isLoading) return <LoadingState label="Discovering reports across accessible workspaces" />;
-  if (estateQuery.isError) return <AuthenticationState />;
+  if (estateQuery.isError) return <PowerBiAuthRequired returnTo="Report lineage" />;
   if (!reportChoices.length) return <EmptyState title="No reports found" text="No accessible reports were returned by estate discovery." />;
 
   return <section className="border border-zinc-200 bg-white">
@@ -234,7 +234,6 @@ function OverviewField({ label, value }: { label: string; value: string }) { ret
 function LoadingState({ label, compact = false }: { label: string; compact?: boolean }) { return <div className={cn("flex items-center justify-center gap-2 border border-zinc-200 bg-zinc-50 text-sm text-zinc-600", compact ? "min-h-[280px]" : "min-h-[560px]")}><Loader2 className="size-4 animate-spin text-cyan-800" />{label}</div>; }
 function ErrorState({ text }: { text: string }) { return <div className="border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">{text}</div>; }
 function EmptyState({ title, text }: { title: string; text: string }) { return <div className="flex min-h-[560px] items-center justify-center border border-zinc-200 bg-white p-6 text-center"><div><FileBarChart2 className="mx-auto size-8 text-zinc-300" /><h1 className="mt-4 text-lg font-semibold">{title}</h1><p className="mt-2 text-sm text-zinc-500">{text}</p></div></div>; }
-function AuthenticationState() { return <div className="flex min-h-[560px] items-center justify-center border border-zinc-200 bg-white p-6 text-center"><div className="max-w-md"><AlertCircle className="mx-auto size-8 text-amber-500" /><h1 className="mt-4 text-lg font-semibold">Power BI authentication is required</h1><p className="mt-2 text-sm leading-6 text-zinc-500">Complete Power BI setup with device code or a service principal, then return to Report lineage.</p><a href="/workspace/power-bi" className="mt-5 inline-flex h-8 items-center rounded-lg bg-zinc-950 px-3 text-sm font-medium text-white">Open Power BI setup</a></div></div>; }
 
 function buildReportChoices(estate: EstateResponse | undefined): ReportChoice[] {
   if (!estate) return [];

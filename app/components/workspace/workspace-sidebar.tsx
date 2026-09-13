@@ -4,7 +4,10 @@ import {
   GitBranch,
   Home,
   KeyRound,
+  Radar,
   SearchCheck,
+  Sigma,
+  TableProperties,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -28,7 +31,7 @@ export function WorkspaceSidebar({
 }) {
   const documentationActive =
     activeSection === "api-docs" ||
-    !["power-bi", "database", "explorer", "report-lineage"].includes(activeSection);
+    !["power-bi", "database", "explorer", "report-lineage", "table-impact", "measure-impact", "scanner"].includes(activeSection);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#fafbfc]">
@@ -39,7 +42,7 @@ export function WorkspaceSidebar({
           className="mb-5 flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-left text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950"
         >
           <Home className="size-4" />
-          Overview
+          Home
         </button>
 
         <SidebarLabel>Setup</SidebarLabel>
@@ -77,6 +80,27 @@ export function WorkspaceSidebar({
             label="Report lineage"
             meta="Reports"
             onClick={() => onNavigate("report-lineage")}
+          />
+          <NavigationItem
+            active={activeSection === "table-impact"}
+            icon={TableProperties}
+            label="Table impact"
+            meta="Impact"
+            onClick={() => onNavigate("table-impact")}
+          />
+          <NavigationItem
+            active={activeSection === "measure-impact"}
+            icon={Sigma}
+            label="Measure impact"
+            meta="Impact"
+            onClick={() => onNavigate("measure-impact")}
+          />
+          <NavigationItem
+            active={activeSection === "scanner"}
+            icon={Radar}
+            label="Scanner"
+            meta="Admin"
+            onClick={() => onNavigate("scanner")}
           />
         </div>
 
