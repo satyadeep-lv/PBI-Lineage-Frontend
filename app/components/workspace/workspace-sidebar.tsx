@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  BookOpenCheck,
   Database,
   GitBranch,
   Home,
@@ -36,14 +37,22 @@ export function WorkspaceSidebar({
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#fafbfc]">
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        <button
-          type="button"
-          onClick={() => onNavigate("home")}
-          className="mb-5 flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-left text-sm font-medium text-zinc-600 transition hover:bg-zinc-100 hover:text-zinc-950"
-        >
-          <Home className="size-4" />
-          Home
-        </button>
+        <div className="mb-5 space-y-1">
+          <NavigationItem
+            active={false}
+            icon={BookOpenCheck}
+            label="Setup guide"
+            meta="Start"
+            onClick={() => onNavigate("setup-guide")}
+          />
+          <NavigationItem
+            active={false}
+            icon={Home}
+            label="Overview"
+            meta=""
+            onClick={() => onNavigate("home")}
+          />
+        </div>
 
         <SidebarLabel>Setup</SidebarLabel>
         <div className="space-y-1">

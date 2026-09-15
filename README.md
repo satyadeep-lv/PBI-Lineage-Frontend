@@ -3,7 +3,9 @@
 Browser application for exploring Power BI assets, semantic models, DAX
 dependencies, physical database evidence, report visuals, and downstream
 lineage. It runs as a separate source-control project from the FastAPI backend
-and is designed for static hosting in IIS on the same Windows EC2 machine.
+and is built as a static SPA for IIS. The current automated production path
+deploys both services on the same Windows Azure VM behind
+`https://lvpowerbilineage.com`.
 
 Developed by **Satyadeep Singh**.
 
@@ -11,8 +13,12 @@ Developed by **Satyadeep Singh**.
 
 The application turns the backend API surface into guided operational views:
 
+- Read a setup guide covering Microsoft Entra registration, Power BI and
+  Fabric tenant settings, Scanner metadata, database-provider access,
+  backend environment policy, verification, and official references.
 - Authenticate Power BI and Fabric with a device code or service principal.
-- Create and inspect an optional Snowflake session.
+- Create and inspect an optional source-system session through the currently
+  implemented Snowflake connector.
 - Browse Power BI workspaces, reports, and semantic models by name.
 - Inspect report pages, semantic objects, DAX, source paths, and XMLA evidence.
 - Map physical database columns to semantic columns and calculations.
@@ -32,9 +38,9 @@ The application turns the backend API surface into guided operational views:
 - Browse and execute every operation published by FastAPI OpenAPI from the
   in-application API documentation view.
 
-The frontend does not own Power BI, Fabric, or Snowflake credentials. It sends
-them to FastAPI when required and relies on backend-managed HTTP-only session
-cookies for subsequent requests.
+The frontend does not own Power BI, Fabric, or database-provider credentials.
+It sends them to FastAPI when required and relies on backend-managed HTTP-only
+session cookies for subsequent requests.
 
 ## Repository Boundary
 
@@ -66,6 +72,27 @@ C:\Users\Administrator\Desktop\PBI-Lineage-Frontend\REF_DOC\PROJECT_CONTEXT.md
 `REF_DOC/` is currently ignored by this repository, so the frontend context is
 local documentation unless the ignore rule is intentionally changed.
 
+The shorter contributor documentation is indexed at
+[`Docs/README.md`](Docs/README.md). This root README remains the authoritative
+setup, behavior, deployment, and troubleshooting handbook.
+
+### Source-Control Readiness
+
+The impact-analysis, scanner, shared-lineage, documentation, and browser-test
+files are required application source. Before cloning this project onto a new
+computer or triggering CI/CD, run:
+
+```powershell
+git status --short
+git ls-files app tests Docs
+```
+
+Review every `??` entry and add the intended source files to Git before
+committing. A local build can succeed with untracked files while a fresh clone
+and GitHub Actions fail because those files were never included in the commit.
+Never add generated `node_modules/`, `.react-router/`, `build/`,
+`test-results/`, or `playwright-report/` directories.
+
 ## Technology Stack
 
 | Area | Implementation | Responsibility |
@@ -85,9 +112,9 @@ local documentation unless the ignore rule is intentionally changed.
 | API catalog | Runtime OpenAPI parser | Discovers and groups current FastAPI operations. |
 | API generation | Orval installed | Available for future generated clients; no generated Orval client is currently committed. |
 | Unit/component tests | Vitest and React Testing Library installed | Test dependencies are ready; focused unit suites have not yet been added. |
-| E2E | Playwright | Desktop/mobile report-lineage and API-execution browser coverage. |
-| Production frontend | IIS static site | Serves `build/client` and provides SPA fallback/reverse proxy rules. |
-| Production backend | Existing Windows Docker deployment | FastAPI remains independently built and operated. |
+| E2E | Playwright | API execution, report lineage, impact analysis, and scanner browser coverage. |
+| Production frontend | IIS static site on Azure VM | Serves versioned `build/client` releases and provides SPA fallback/reverse proxy rules. |
+| Production backend | Windows Docker deployment on the same VM | FastAPI remains independently built and operated behind IIS. |
 
 ## Prerequisites
 
@@ -177,9 +204,13 @@ Use `localhost` consistently. Binding the server to `127.0.0.1` while React
 Router generates development imports for `localhost` can cause failed dynamic
 module requests during optimization reloads.
 
-Vite explicitly prebundles TanStack Query, XYFlow, and AG Grid because they are
-used behind lazy analysis routes. A clean install can still spend time building
-its dependency cache once. Wait for Vite to finish before refreshing repeatedly.
+Vite explicitly prebundles all runtime packages imported by the route graph,
+including Base UI, forms, TanStack Query, XYFlow, AG Grid, Dagre, cmdk,
+Lucide, and Zustand. React Router's virtual route entry otherwise lets some
+lazy-route dependencies be discovered in later waves; each new wave can
+invalidate modules already requested by the browser. A clean install can spend
+time building this dependency cache once, but the application should not blank
+or restart optimization on first analysis navigation.
 
 Do not run `npm run build` while actively using the same Vite process. The build
 writes `build/`, which can trigger development file-watcher reloads. Stop the
@@ -198,12 +229,15 @@ development server, build, and then restart it.
 | `npx playwright test tests/report-lineage.spec.ts` | Run only report-lineage desktop/mobile coverage. |
 | `npx playwright test tests/impact-analysis.spec.ts` | Run only table-impact/measure-impact coverage. |
 | `npx playwright test tests/scanner.spec.ts` | Run only Scanner page and Explorer scan-panel coverage. |
+| `npx playwright test tests/home.spec.ts` | Run only Home content, navigation, product-image, and desktop/mobile UX coverage. |
+| `npx playwright test tests/setup-guide.spec.ts` | Run only Setup Guide route, navigation, references, and responsive-containment coverage. |
 
 ## Route Map
 
 | Route | View | Data responsibility |
 | --- | --- | --- |
-| `/` | Overview | Product purpose, value, workflow, and start action. |
+| `/` | Home | High-level product purpose, investigation questions, evidence path, real workspace preview, and one Start action. |
+| `/setup-guide` | Setup Guide | Static prerequisites for Microsoft, Fabric, Scanner, XMLA, the current Snowflake connector, backend hosting, and application verification. |
 | `/workspace` | Power BI setup | Default workspace route. |
 | `/workspace/power-bi` | Power BI setup | Device-code and service-principal authentication. |
 | `/workspace/database` | Database setup | Snowflake connection, status, and logout. |
@@ -223,11 +257,14 @@ IIS SPA fallback in production.
 
 ```text
 Home
+  -> Setup Guide from the header, footer, or workspace menu
+       -> roles, permissions, current connector, backend, and hosting checks
+  -> Start
   -> Power BI setup
        -> device-code session OR service-principal session
        -> Power BI and Fabric readiness
   -> Database setup
-       -> optional Snowflake session
+       -> optional source-system session (currently Snowflake)
   -> Explorer
        -> workspace
        -> report or semantic model
@@ -566,7 +603,7 @@ operator must still enter IDs and values valid for the connected tenant.
 
 | State | Owner | Lifetime |
 | --- | --- | --- |
-| Backend health | TanStack Query in `AppHeader` | Refetched every 15 seconds. |
+| Backend health | TanStack Query in `AppHeader` | Refetched every 15 seconds on setup/workspace routes; disabled on Home. |
 | OpenAPI document | TanStack Query in workspace route | Current browser query cache. |
 | Explorer/report data | TanStack Query | Selection-keyed cache with feature-specific stale times. |
 | API execution result | `useApiExecutor` | Current workspace route mount. |
@@ -584,6 +621,10 @@ Generated `node_modules/`, `.react-router/`, `build/`, `test-results/`, and
 
 ```text
 PBI-Lineage-Frontend/
+|-- .azure/
+|   `-- scripts/
+|       |-- deploy-frontend.ps1
+|       `-- download-frontend-artifact.ps1
 |-- .agents/
 |   `-- skills/react-router/
 |       |-- SKILL.md
@@ -592,35 +633,40 @@ PBI-Lineage-Frontend/
 |           |-- data-mode.md
 |           |-- framework-mode.md
 |           `-- rsc.md
+|-- .github/
+|   `-- workflows/
+|       |-- azure-oidc-test.yml
+|       |-- cd.yml
+|       |-- ci.yml
+|       `-- storage-upload-test.yml
+|-- Docs/
+|   |-- 01-overview.md
+|   |-- 02-architecture.md
+|   |-- 03-features-and-data-flows.md
+|   |-- 04-state-and-api-layer.md
+|   |-- 05-file-reference.md
+|   |-- 06-testing-and-deployment.md
+|   `-- README.md
 |-- app/
 |   |-- components/
+|   |   |-- setup-guide/
+|   |   |   `-- setup-guide.tsx
 |   |   |-- ui/
 |   |   |   |-- badge.tsx
 |   |   |   |-- button.tsx
-|   |   |   |-- card.tsx
 |   |   |   |-- checkbox.tsx
 |   |   |   |-- command.tsx
 |   |   |   |-- dialog.tsx
-|   |   |   |-- dropdown-menu.tsx
 |   |   |   |-- input-group.tsx
 |   |   |   |-- input.tsx
 |   |   |   |-- label.tsx
 |   |   |   |-- select.tsx
 |   |   |   |-- separator.tsx
 |   |   |   |-- sheet.tsx
-|   |   |   |-- skeleton.tsx
-|   |   |   |-- sonner.tsx
-|   |   |   |-- switch.tsx
-|   |   |   |-- table.tsx
-|   |   |   |-- tabs.tsx
-|   |   |   |-- textarea.tsx
-|   |   |   |-- toast.tsx
-|   |   |   `-- tooltip.tsx
+|   |   |   `-- textarea.tsx
 |   |   |-- workspace/
 |   |   |   |-- api-documentation.tsx
-|   |   |   |-- api-domain-canvas.tsx
 |   |   |   |-- api-execution-panel.tsx
-|   |   |   |-- api-output-panel.tsx
 |   |   |   |-- auth-required.tsx
 |   |   |   |-- database-setup.tsx
 |   |   |   |-- explorer.tsx
@@ -652,23 +698,24 @@ PBI-Lineage-Frontend/
 |   |   `-- utils.ts
 |   |-- routes/
 |   |   |-- home.tsx
+|   |   |-- setup-guide.tsx
 |   |   `-- workspace.tsx
 |   |-- stores/
 |   |   `-- app-store.ts
-|   |-- welcome/
-|   |   |-- logo-dark.svg
-|   |   |-- logo-light.svg
-|   |   `-- welcome.tsx
 |   |-- app.css
 |   |-- root.tsx
 |   `-- routes.ts
 |-- public/
-|   `-- favicon.ico
+|   |-- favicon.ico
+|   |-- product-lineage-view.png
+|   `-- web.config
 |-- tests/
 |   |-- api-documentation.spec.ts
+|   |-- home.spec.ts
 |   |-- impact-analysis.spec.ts
 |   |-- report-lineage.spec.ts
-|   `-- scanner.spec.ts
+|   |-- scanner.spec.ts
+|   `-- setup-guide.spec.ts
 |-- .dockerignore
 |-- .gitignore
 |-- components.json
@@ -689,9 +736,10 @@ PBI-Lineage-Frontend/
 | File | Purpose and fulfilled responsibility |
 | --- | --- |
 | `README.md` | Primary source-controlled setup, architecture, operation, deployment, troubleshooting, and file-reference handbook. |
+| `Docs/README.md` | Index for focused contributor documentation covering architecture, features, state/API behavior, files, tests, and deployment. |
 | `package.json` | Declares runtime/dev dependencies and the `dev`, `build`, `start`, and `typecheck` commands. |
 | `package-lock.json` | Locks the exact dependency graph for reproducible `npm ci` installs. |
-| `vite.config.ts` | Registers React Router and Tailwind plugins, resolves `~/*`, prebundles heavy lazy-route packages, and proxies local backend paths. |
+| `vite.config.ts` | Registers React Router and Tailwind plugins, resolves `~/*`, prebundles the complete runtime import set to prevent cold lazy-route optimizer invalidation, and proxies local backend paths. |
 | `react-router.config.ts` | Selects SPA mode with `ssr: false` for IIS static hosting. |
 | `tsconfig.json` | Enforces strict TypeScript, browser/ES2022 libraries, bundler resolution, and `~/*` aliases. |
 | `components.json` | Configures shadcn style, aliases, Tailwind CSS entry, Base UI behavior, and Lucide icons. |
@@ -700,29 +748,39 @@ PBI-Lineage-Frontend/
 | `.dockerignore` | Excludes dependencies, generated builds, local context, and README from Docker build context. |
 | `.gitignore` | Excludes dependencies, generated React Router/build/test artifacts, environment files, and local context documents. |
 | `public/favicon.ico` | Browser/site icon copied unchanged into the production client output. |
+| `public/product-lineage-view.png` | Tested Report Lineage workspace capture used as the Home product preview. |
+| `public/web.config` | IIS rewrite configuration copied into every production artifact; proxies API/OpenAPI requests to FastAPI and falls back application routes to `index.html`. |
+| `.github/workflows/ci.yml` | Main-branch/pull-request quality gate using Node 22, `npm ci`, strict typecheck, and production build. |
+| `.github/workflows/cd.yml` | Production deployment gate: builds the successful main commit, uploads a ZIP through Azure OIDC, invokes the VM release scripts, and smoke-tests the public site and backend health. |
+| `.github/workflows/azure-oidc-test.yml` | Manual Azure federated-identity and resource-group access diagnostic. |
+| `.github/workflows/storage-upload-test.yml` | Manual production-environment build and Azure Blob upload validation without changing the IIS site. |
+| `.azure/scripts/download-frontend-artifact.ps1` | Uses the Azure VM managed identity to download a named release ZIP from Blob Storage and emits a machine-readable success marker. |
+| `.azure/scripts/deploy-frontend.ps1` | Validates and stages a versioned release, atomically repoints IIS, performs local HTTP validation, rolls back on failure, records the release, and prunes old releases. |
 
 ### Application Bootstrap And Routes
 
 | File | Purpose and fulfilled responsibility |
 | --- | --- |
-| `app/routes.ts` | Declares the index route and optional workspace section route in React Router Framework Mode. |
+| `app/routes.ts` | Declares the Home index, `/setup-guide`, and optional workspace section route in React Router Framework Mode. |
 | `app/root.tsx` | Creates the HTML shell, loads global CSS, installs QueryProvider, renders route outlets/scripts, restores scroll, and handles route errors. |
 | `app/app.css` | Imports Tailwind, shadcn, animation, and Geist font styles; defines light/dark design tokens, radii, and global minimum width. |
-| `app/routes/home.tsx` | Renders the product overview, value/time-saving summary, workflow, and setup entry point. |
-| `app/routes/workspace.tsx` | Owns the shared workspace shell, OpenAPI query, endpoint catalog, API executor, sidebar routing, mobile navigation, and lazy Explorer/Report Lineage loading. |
+| `app/routes/setup-guide.tsx` | Wraps the static setup guide with route metadata plus the shared header and footer. |
+| `app/routes/home.tsx` | Renders `/`: database-neutral product overview, real workspace preview, evidence path, and the single primary Start action. |
+| `app/routes/workspace.tsx` | Owns the shared workspace shell, OpenAPI query, endpoint catalog, API executor, sidebar routing, mobile navigation, and lazy loading for Explorer, Report Lineage, Table Impact, Measure Impact, and Scanner. |
 
 ### Shared Application Components
 
 | File | Purpose and fulfilled responsibility |
 | --- | --- |
-| `app/components/app-header.tsx` | Renders product identity and a TanStack Query backend-health badge refreshed every 15 seconds. |
-| `app/components/app-footer.tsx` | Renders the mandatory developer attribution and current-year copyright on all pages. |
+| `app/components/app-header.tsx` | Renders product identity, active Home/Setup Guide/Workspace/API links, mobile navigation, and an optional TanStack Query backend-health badge. Home disables the health request and badge. |
+| `app/components/app-footer.tsx` | Renders shared navigation, mandatory developer attribution, and current-year copyright on all pages. |
+| `app/components/setup-guide/setup-guide.tsx` | Renders the static, role-oriented Microsoft/Fabric/Scanner/XMLA/Snowflake/backend setup handbook, ordered application handoff, troubleshooting matrix, and authoritative external references. It performs no provider API calls. |
 
 ### Workspace Components
 
 | File | Purpose and fulfilled responsibility |
 | --- | --- |
-| `app/components/workspace/workspace-sidebar.tsx` | Defines setup, exploration, table/measure-impact, report-lineage, and API-documentation navigation for desktop/mobile shells. |
+| `app/components/workspace/workspace-sidebar.tsx` | Defines Setup Guide, Overview, operational setup, exploration, table/measure-impact, report-lineage, and API-documentation navigation for desktop/mobile shells. |
 | `app/components/workspace/power-bi-setup.tsx` | Validates and executes device-code/service-principal setup, presents provider readiness, clears secrets, and invalidates identity-dependent caches. |
 | `app/components/workspace/database-setup.tsx` | Validates Snowflake connection input and presents connect/status/logout information without raw setup JSON. |
 | `app/components/workspace/explorer.tsx` | Implements workspace-scoped report/model exploration, background heavy queries, AG Grid tables, copy/export, semantic mapping, column/measure diagrams rendered through the shared lineage engine, and an opt-in metadata scan panel for the current workspace's dashboards, app linkage, and ownership. |
@@ -736,8 +794,6 @@ PBI-Lineage-Frontend/
 | `app/components/workspace/impact-picker.tsx` | Shared pickers for Table Impact and Measure Impact: `WorkspaceScopeSelect` (multi-select workspace scope with select-all/clear) and `ObjectSearchSelect` (a `Command`-based searchable combobox over a preloaded table/measure inventory). |
 | `app/components/workspace/api-documentation.tsx` | Groups/searches OpenAPI operations and expands the selected operation into the active execution workbench. |
 | `app/components/workspace/api-execution-panel.tsx` | Renders parameter/body inputs, validates JSON, executes through the shared hook, clears sensitive values, and presents copyable body/header output. |
-| `app/components/workspace/api-domain-canvas.tsx` | Retained alternate full-domain operation selector/executor. It is not routed by the current workspace; current documentation uses `ApiExecutionPanel`. |
-| `app/components/workspace/api-output-panel.tsx` | Response renderer used by the retained alternate `ApiDomainCanvas`; not used by the current documentation execution panel. |
 
 ### Lineage Diagram Engine
 
@@ -776,27 +832,18 @@ in feature components and primitive behavior/styling here.
 | --- | --- |
 | `app/components/ui/badge.tsx` | Compact status/category labels. |
 | `app/components/ui/button.tsx` | Button variants, sizes, and rendered-link/button behavior. |
-| `app/components/ui/card.tsx` | Card structure primitives; use only for genuinely framed items. |
 | `app/components/ui/checkbox.tsx` | Accessible binary checkbox control. |
 | `app/components/ui/command.tsx` | Command/search list composition based on cmdk. |
 | `app/components/ui/dialog.tsx` | Accessible modal dialog primitives. |
-| `app/components/ui/dropdown-menu.tsx` | Accessible action/option menus. |
 | `app/components/ui/input-group.tsx` | Inputs with leading/trailing controls or content. |
 | `app/components/ui/input.tsx` | Standard text/password/number input styling. |
 | `app/components/ui/label.tsx` | Accessible form labels. |
 | `app/components/ui/select.tsx` | Base UI select trigger, content, and option primitives. |
 | `app/components/ui/separator.tsx` | Horizontal/vertical semantic separators. |
 | `app/components/ui/sheet.tsx` | Responsive side sheet used by mobile workspace navigation. |
-| `app/components/ui/skeleton.tsx` | Loading placeholder primitive. |
-| `app/components/ui/sonner.tsx` | Sonner toast-host integration. |
-| `app/components/ui/switch.tsx` | Accessible on/off switch. |
-| `app/components/ui/table.tsx` | Semantic HTML table styling primitives. |
-| `app/components/ui/tabs.tsx` | Accessible tab list, trigger, and content primitives. |
 | `app/components/ui/textarea.tsx` | Multi-line input used by JSON request editors. |
-| `app/components/ui/toast.tsx` | Local toast content/action structure. |
-| `app/components/ui/tooltip.tsx` | Hover/focus descriptions for icon controls. |
 
-### Tests, Context, And Retained Template Files
+### Tests And Context
 
 | File | Purpose and fulfilled responsibility |
 | --- | --- |
@@ -804,10 +851,9 @@ in feature components and primitive behavior/styling here.
 | `tests/impact-analysis.spec.ts` | Mocks a two-workspace, two-model backend fixture and verifies Table Impact's and Measure Impact's workspace-scope multi-select, searchable table/measure picker (including cross-workspace merging and scope narrowing), directed/collapsible diagrams, impact grids, and evidence status. |
 | `tests/scanner.spec.ts` | Mocks the four `/api/v1/scanner/*` endpoints (including a status route that reports "Running" before "Succeeded", proving the poll loop works) against a fixture covering every entity type, and verifies both the dedicated Scanner page's multi-workspace scan-and-browse flow across all five tabs and Explorer's single-workspace scan panel replacing its dashboards/app-linkage/ownership placeholders. |
 | `tests/api-documentation.spec.ts` | Mocks OpenAPI/backend operations and verifies GET/POST execution, JSON validation, response metadata, and output copying behavior. |
+| `tests/home.spec.ts` | Verifies the Home route, single main-content action, database-neutral copy, no Home health request, working product image, shared navigation, and desktop/mobile containment. |
+| `tests/setup-guide.spec.ts` | Verifies `/setup-guide`, required setup sections and official links, navigation to Home/workspace, and desktop/mobile layouts. |
 | `REF_DOC/PROJECT_CONTEXT.md` | Local continuity document containing current frontend contracts and implementation constraints; ignored by Git. |
-| `app/welcome/welcome.tsx` | Unused React Router starter welcome component retained from scaffolding; no current route imports it. |
-| `app/welcome/logo-light.svg` | Unused light starter logo referenced only by the retained welcome component. |
-| `app/welcome/logo-dark.svg` | Unused dark starter logo referenced only by the retained welcome component. |
 
 ### Local Agent Reference Files
 
@@ -862,6 +908,80 @@ C:\Users\Administrator\Desktop\PBI-Lineage-Frontend\build\client
 Do not deploy source, `node_modules`, `.env`, tests, Playwright output, or the
 React Router server bundle when IIS is serving the static SPA.
 
+## Automated Azure Deployment
+
+The production workflow in `.github/workflows/cd.yml` deploys the static IIS
+artifact to the Windows Azure VM. It runs only when `DEPLOYMENT_ENABLED` is
+`true` and either:
+
+1. `Frontend CI` completed successfully for `main`.
+2. A maintainer manually dispatched the workflow from `main`.
+
+The workflow deliberately uses `cancel-in-progress: false` so one production
+release cannot interrupt another. Its deployment sequence is:
+
+1. Resolve and check out the exact release commit.
+2. Use Node 22 and `npm ci` to reproduce the locked dependency graph.
+3. Build the SPA and require both `build/client/index.html` and
+   `build/client/web.config`.
+4. ZIP only the contents of `build/client`.
+5. Authenticate GitHub Actions to Azure through OIDC, without a stored Azure
+   client secret.
+6. Upload the ZIP to the configured private Blob Storage container.
+7. invoke Azure VM Run Command to execute
+   `.azure/scripts/download-frontend-artifact.ps1`; the VM authenticates to
+   storage with its managed identity.
+8. Invoke `.azure/scripts/deploy-frontend.ps1` to stage and validate a
+   versioned release, repoint the `PBI-Lineage` IIS site, recycle its
+   application pool, and verify the local site.
+9. Roll IIS back to its prior physical path automatically when deployment or
+   validation fails.
+10. Smoke-test `https://lvpowerbilineage.com/` and
+    `https://lvpowerbilineage.com/api/v1/health/live` from the runner.
+
+Required GitHub `production` environment secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `AZURE_CLIENT_ID` | Client ID of the Azure federated identity used by GitHub OIDC. |
+| `AZURE_TENANT_ID` | Microsoft Entra tenant containing the deployment identity. |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription containing the production resources. |
+
+Required GitHub repository/environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `DEPLOYMENT_ENABLED` | Must equal `true` before the production job is allowed to run. |
+| `AZURE_RESOURCE_GROUP` | Resource group containing the target VM. |
+| `AZURE_VM_NAME` | Windows VM reached through Azure VM Run Command. |
+| `STORAGE_ACCOUNT_NAME` | Storage account receiving release ZIPs. |
+| `FRONTEND_CONTAINER_NAME` | Blob container used for frontend release artifacts. |
+
+Production VM layout:
+
+```text
+C:\pbi-lineage\
+|-- artifacts\
+|   `-- frontend-<commit-sha>.zip
+`-- frontend\
+    |-- current-release.txt
+    `-- releases\
+        `-- <commit-sha>\
+            |-- index.html
+            |-- web.config
+            `-- assets\
+```
+
+The GitHub OIDC identity needs permission to upload the Blob artifact and run
+commands on the VM. The VM managed identity needs read access to the Blob
+container. IIS and the `PBI-Lineage` site must already exist; deployment moves
+versioned static files and changes the site physical path but does not install
+IIS or create the site.
+
+Use `.github/workflows/azure-oidc-test.yml` to verify federated Azure access and
+`.github/workflows/storage-upload-test.yml` to validate build plus Blob upload
+without repointing IIS. Both are manual diagnostic workflows.
+
 ## IIS Setup
 
 Recommended Windows features/modules:
@@ -915,14 +1035,18 @@ Swagger page publicly.
 
 After IIS deployment verify:
 
-1. `/` loads without a Node process.
+1. `/` loads Home without a Node process and `/setup-guide` loads directly.
 2. `/workspace/report-lineage` loads directly after a hard refresh.
-3. `/api/v1/health` returns through IIS.
-4. `/openapi.json` returns through IIS.
-5. Power BI login sets and reuses the backend session cookie.
-6. API documentation can execute a harmless GET such as health/status.
-7. CSV/Excel downloads work in the browser.
-8. The footer shows `Developed by Satyadeep Singh` and copyright.
+3. `/workspace/table-impact`, `/workspace/measure-impact`, and
+   `/workspace/scanner` load directly after hard refreshes.
+4. `/api/v1/health/live` returns through IIS.
+5. `/openapi.json` returns through IIS.
+6. Power BI login sets and reuses the backend session cookie.
+7. API documentation can execute a harmless GET such as health/status.
+8. CSV/Excel downloads work in the browser.
+9. The footer shows `Developed by Satyadeep Singh` and copyright.
+10. `C:\pbi-lineage\frontend\current-release.txt` contains the deployed
+    commit SHA after an automated release.
 
 ## Troubleshooting
 
@@ -951,7 +1075,8 @@ disable machine security policy only for this project.
 
 - Check the Vite console for a failed dynamic import.
 - Confirm `localhost:5173` matches the server URL.
-- Confirm AG Grid and XYFlow are listed in `optimizeDeps.include`.
+- Confirm the complete runtime import list remains in `optimizeDeps.include`;
+  lazy imports that are omitted can trigger another optimizer generation.
 - Run `npm run typecheck` to catch a failed lazy module compilation.
 
 ### Backend badge is offline
@@ -1009,8 +1134,6 @@ requests to `/index.html` after the API proxy rule.
   creator/last-editor/configuring identities.
 - Orval, Vitest, and React Testing Library are installed but generated clients
   and focused unit/component suites are not yet committed.
-- `ApiDomainCanvas`, `ApiOutputPanel`, and `app/welcome/` are retained but not
-  used by current routes; remove them only as a deliberate cleanup change.
 - Table Impact and Measure Impact compute cross-report/visual evidence from at
   most the first 300 reports bound to a semantic model (a visible notice
   appears if that cap is reached); see "Suggested Backend Endpoints" below for

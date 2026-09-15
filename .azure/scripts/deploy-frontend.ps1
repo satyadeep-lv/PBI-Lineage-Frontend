@@ -119,6 +119,14 @@ Move-Item `
     -Path $StagingPath `
     -Destination $ReleasePath
 
+# The files have moved from staging to the final release directory,
+# so update these paths before validating them.
+$IndexFile = Join-Path $ReleasePath "index.html"
+$WebConfigFile = Join-Path $ReleasePath "web.config"
+
+Write-Host "Release staged successfully:"
+Write-Host $ReleasePath
+
 # Staging no longer exists after promotion.
 $IndexFile = Join-Path $ReleasePath "index.html"
 $WebConfigFile = Join-Path $ReleasePath "web.config"
@@ -221,14 +229,30 @@ try {
     # Record deployed version
     # --------------------------------------------------------
 
+    Write-Host "Validating frontend through IIS..."
+
+    $FrontendHeaders = @{
+        Host = "lvpowerbilineage.com"
+    }
+
     $FrontendResponse = Invoke-WebRequest `
         -Uri "http://127.0.0.1/" `
+        -Headers $FrontendHeaders `
         -UseBasicParsing `
-        -TimeoutSec 15
+        -TimeoutSec 30
 
     if ($FrontendResponse.StatusCode -ne 200) {
-        throw "Local frontend HTTP validation failed."
+        throw (
+            "Local frontend HTTP validation failed. " +
+            "HTTP status: $($FrontendResponse.StatusCode)"
+        )
     }
+
+    if ($FrontendResponse.Content -notmatch "<html") {
+        throw "Local frontend response does not contain HTML."
+    }
+
+    Write-Host "Local IIS frontend validation passed."
 
     Set-Content `
         -Path $CurrentReleaseFile `
@@ -333,8 +357,10 @@ foreach ($Directory in $ReleaseDirectories) {
 }
 
 Write-Host ""
+Write-Host ""
 Write-Host "========================================="
 Write-Host "Frontend deployment completed successfully"
 Write-Host "Release: $ReleaseId"
-Write-Host "DEPLOYMENT_RESULT=SUCCESS"
 Write-Host "========================================="
+
+Write-Host "DEPLOYMENT_RESULT=SUCCESS"

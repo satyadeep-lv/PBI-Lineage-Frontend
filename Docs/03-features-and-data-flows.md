@@ -4,11 +4,14 @@
 
 ```
 Home
+  -> Setup Guide from the header, footer, or workspace menu
+       -> Microsoft/Fabric/Scanner/current database connector/backend prerequisites
+  -> Start
   -> Power BI setup
        -> device-code session OR service-principal session
        -> Power BI and Fabric readiness
   -> Database setup
-       -> optional Snowflake session
+       -> optional source-system session (currently Snowflake)
   -> Explorer
        -> workspace -> report or semantic model
        -> report detail / semantic objects / mappings / diagrams
@@ -22,6 +25,27 @@ Home
        -> authenticated execution
        -> response body and headers
 ```
+
+## Static Setup Guide
+
+`app/routes/setup-guide.tsx` and
+`app/components/setup-guide/setup-guide.tsx` render `/setup-guide`.
+The guide performs no provider requests. It documents responsible roles,
+device-code/service-principal/browser-SSO choices, the exact delegated scopes
+requested by this backend, Scanner tenant settings, optional XMLA, all four
+supported Snowflake authentication methods, backend `.env` policy, IIS/Vite
+connectivity, the ordered in-app workflow, verification, troubleshooting, and
+official Microsoft/Snowflake references. Wide tables and code examples scroll
+inside their containers rather than widening mobile pages.
+
+## Home
+
+`app/routes/home.tsx` renders `/` as a database-neutral product overview. It
+uses a tested Report Lineage workspace capture, explains the investigation
+questions and evidence path at a high level, and contains one primary Start
+action to Power BI setup. Navigation links stay in the shared header and
+footer. Home disables the backend health query because no connection is needed
+to read the overview.
 
 ## Authentication and session behavior
 
@@ -124,6 +148,45 @@ Diagram modes (`report-lineage-diagrams.tsx`, React Flow):
 React Flow is remounted whenever graph identity changes, so a new selection
 fits itself to the viewport instead of inheriting the previous pan/zoom.
 
+## Shared Lineage Diagram Engine
+
+Explorer, Report Lineage, Table Impact, and Measure Impact build the same
+`LineageGraph` contract and render it through
+`app/components/workspace/lineage/lineage-diagram.tsx`. Dagre computes
+left-to-right or top-to-bottom positions, React Flow renders directed
+arrowheads, and each custom node can collapse or restore its descendants.
+`app/lib/dependency-graph.ts` provides the shared breadth-first dependency
+closure used to turn DAX references into those graphs.
+
+## Table Impact
+
+`app/components/workspace/table-impact.tsx` preloads every parseable semantic
+model in the selected workspace scope through `fetchEstateInventory`. The
+operator searches one combined table list, optionally selects one column, and
+chooses upstream or downstream traversal. Exact DAX dependencies come from
+`POST /api/v1/lineage/dax/analyze`; estate bindings and batched Explorer
+lookups attach report and visual usage. Diagram and AG Grid results degrade
+independently when elevated lineage evidence is unavailable.
+
+## Measure Impact
+
+`app/components/workspace/measure-impact.tsx` uses the same scoped inventory
+and evidence pipeline but starts from one measure. It computes upstream input
+columns/measures and downstream dependent calculations together, then renders
+their direction, depth, DAX evidence, report usage, and visual usage in a
+collapsible diagram and exportable grid.
+
+## Power BI Admin Scanner
+
+`app/components/workspace/scanner.tsx`, `app/lib/scanner-api.ts`, and
+`app/lib/use-workspace-scan.ts` implement the backend's four-step scanner
+workflow: submit 1-100 workspace IDs, poll status every four seconds, stop at
+`Succeeded`/`Failed`, and fetch the immutable result once. The page exposes
+workspaces/tags, reports/dashboards/tiles, semantic objects and M expressions,
+dependencies, and datasource instances. Explorer reuses the same hook for an
+explicit single-workspace scan in Assets & access. Scans never start
+automatically because Microsoft applies tenant quotas.
+
 ## API Documentation and execution
 (`app/components/workspace/api-documentation.tsx` +
 `api-execution-panel.tsx`)
@@ -147,13 +210,6 @@ Per operation, the UI provides:
   admin-key policy as the rest of the app).
 - Status, elapsed duration, response body, response headers, with
   body/header tabs and copyable output.
-
-Two components are **retained but unused** by the current route:
-`api-domain-canvas.tsx` (alternate full-domain operation selector/executor)
-and `api-output-panel.tsx` (its response renderer). Current documentation
-uses `ApiExecutionPanel` inside `ApiDocumentation` instead. Don't build on
-top of the retained pair without first checking whether they're still meant
-to be dead code — see [05-file-reference.md](05-file-reference.md).
 
 ## Table copy and export rules
 

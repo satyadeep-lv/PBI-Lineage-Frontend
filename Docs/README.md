@@ -1,37 +1,47 @@
 # Documentation Index
 
-Context documentation for the **PBI Lineage Explorer Frontend** — generated from
-the current source tree so it stays accurate for future contributors and
-coding agents. This folder summarizes and organizes what the project actually
-does; the root [README.md](../README.md) remains the authoritative,
-exhaustive setup/deployment/troubleshooting handbook and should be checked for
-anything not covered here.
+Focused contributor context for the **PBI Lineage Explorer Frontend**, based
+on the current source tree. The root [README.md](../README.md) remains the
+authoritative setup, deployment, security, troubleshooting, and complete file
+handbook.
 
 | File | Contents |
 | --- | --- |
-| [01-overview.md](01-overview.md) | What the app is, who it talks to, technology stack. |
-| [02-architecture.md](02-architecture.md) | Folder layout, route structure, request flow, build/tooling config. |
-| [03-features-and-data-flows.md](03-features-and-data-flows.md) | Power BI/Snowflake setup, Explorer, Report Lineage, API Documentation — what each screen does and which backend endpoints it drives. |
-| [04-state-and-api-layer.md](04-state-and-api-layer.md) | Zustand store, TanStack Query usage, the OpenAPI-driven API catalog/executor. |
-| [05-file-reference.md](05-file-reference.md) | Per-file responsibility table for `app/`, `tests/`, and root config. |
-| [06-testing-and-deployment.md](06-testing-and-deployment.md) | Commands, Playwright coverage, build/IIS deployment notes. |
+| [01-overview.md](01-overview.md) | Purpose, ownership boundary, stack, and prerequisites. |
+| [02-architecture.md](02-architecture.md) | Folder layout, routing, lazy boundaries, request flow, build, and Azure runtime. |
+| [03-features-and-data-flows.md](03-features-and-data-flows.md) | Setup, Explorer, Report Lineage, Table/Measure Impact, Scanner, API Documentation, and exports. |
+| [04-state-and-api-layer.md](04-state-and-api-layer.md) | Zustand/TanStack Query ownership plus OpenAPI, lineage, scanner, dependency, and export utilities. |
+| [05-file-reference.md](05-file-reference.md) | Per-file responsibility map for source, tests, CI/CD, and Azure scripts. |
+| [06-testing-and-deployment.md](06-testing-and-deployment.md) | Commands, Playwright coverage, production build, Azure release, IIS, and verification. |
 
-## Quick facts
+## Quick Facts
 
-- **Stack**: React 19 + React Router 8 (Framework Mode, SPA/`ssr: false`) + Vite 8 + TypeScript (strict) + Tailwind CSS 4 + shadcn/ui (Base UI primitives).
-- **Server state**: TanStack Query v5. **UI state**: Zustand (`app/stores/app-store.ts`).
-- **Data viz**: AG Grid Community (tables), XYFlow/React Flow (lineage diagrams).
-- **Backend**: A separate FastAPI service (sibling repo `PBI-Lineage-Backend`), reached via `/api/v1/*`, `/openapi.json`, `/docs`. The frontend proxies these in dev (`vite.config.ts`) and expects same-origin IIS proxying in production.
-- **No generated API client**: the app reads `/openapi.json` at runtime (`app/lib/api-catalog.ts`) and builds its own typed endpoint catalog — there is no committed Orval-generated client even though Orval is installed.
-- **Entry points**: `app/routes.ts` → `routes/home.tsx` (`/`) and `routes/workspace.tsx` (`/workspace/:section?`).
+- Stack: React 19, React Router Framework Mode SPA, Vite 8, strict TypeScript,
+  Tailwind CSS 4, and shadcn/Base UI.
+- State: TanStack Query for server state; in-memory Zustand for API origin and
+  the optional ephemeral administrative key.
+- Evidence UI: AG Grid for copyable/exportable tables; React Flow plus Dagre
+  for directed, collapsible lineage diagrams.
+- Backend: separate sibling FastAPI repository, reached through `/api/v1/*`
+  and `/openapi.json` using backend-managed HTTP-only sessions.
+- API model: live runtime OpenAPI parsing; Orval is installed but no generated
+  client is committed.
+- Production: static `build/client` on IIS, deployed to a Windows Azure VM via
+  GitHub OIDC, private Blob Storage, VM Run Command, and versioned releases.
+- Entry points: `app/routes.ts` maps Home at `/`, the Setup Guide at
+  `/setup-guide`, and the operational shell at `/workspace/:section?`.
 
-## What this project does (one paragraph)
+## Product Summary
 
-The app is an operational UI for exploring Power BI/Fabric lineage: it drives
-Microsoft device-code or service-principal authentication, optional Snowflake
-enrichment, browses workspaces/reports/semantic models, inspects DAX and XMLA
-evidence, maps physical database columns to semantic objects, renders
-report/column/measure lineage diagrams, supports table copy/CSV/Excel export,
-and exposes a full interactive OpenAPI browser/executor for the backend. It
-owns no provider credentials itself — everything is sent to FastAPI, which
-manages sessions via HTTP-only cookies.
+The app begins with a high-level Home view, keeps a static administrator/operator
+Setup Guide in global and workspace navigation, authenticates Power BI/Fabric,
+optionally connects a source system through the current Snowflake connector, explores
+workspace/report/model evidence, maps semantic objects to physical sources,
+renders report/column/calculation lineage, analyzes table and measure impact,
+runs explicit Power BI Admin metadata scans, provides copy/CSV/Excel output,
+and executes the backend's OpenAPI operations. Provider credentials and tokens
+are never stored by the frontend.
+
+Before relying on this documentation from a fresh clone, confirm all required
+source and Docs files are committed with `git status --short`; local builds can
+see untracked files that CI and another computer cannot.

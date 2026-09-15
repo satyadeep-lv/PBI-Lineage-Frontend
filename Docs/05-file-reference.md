@@ -1,98 +1,122 @@
 # File Reference
 
-## Root configuration
+This page lists maintained source and operational files. Generated
+`node_modules/`, `.react-router/`, `build/`, `test-results/`, and
+`playwright-report/` content is intentionally excluded.
+
+## Root Configuration And Documentation
 
 | File | Purpose |
 | --- | --- |
-| `package.json` | Runtime/dev dependencies; `dev`, `build`, `start`, `typecheck` scripts. |
-| `package-lock.json` | Locked dependency graph for reproducible `npm ci`. |
-| `vite.config.ts` | React Router + Tailwind plugins, `~/*` alias, heavy-dep prebundling, dev proxy to `127.0.0.1:8000`. |
-| `react-router.config.ts` | `ssr: false` — SPA build for IIS static hosting. |
-| `tsconfig.json` | Strict TS, browser/ES2022 libs, bundler resolution, `~/*` alias. |
-| `components.json` | shadcn style/aliases/Tailwind entry/Base UI/Lucide config. |
-| `playwright.config.ts` | Test dir, localhost dev-server reuse, timeouts, traces, failure screenshots. |
-| `Dockerfile` | Optional Node 24 multi-stage build/server image for non-IIS validation; not the production target. |
-| `.dockerignore` / `.gitignore` | Exclude deps, generated build artifacts, `.env`, `REF_DOC/`, `PROJECT_CONTEXT.md`. |
-| `public/favicon.ico` | Copied unchanged into `build/client`. |
+| `README.md` | Authoritative setup, feature, architecture, source-control, deployment, and troubleshooting handbook. |
+| `Docs/README.md` | Index for this focused contributor documentation set. |
+| `package.json` / `package-lock.json` | Runtime and development dependencies, scripts, and reproducible npm graph. |
+| `vite.config.ts` | React Router/Tailwind plugins, path aliases, heavy dependency prebundling, and local FastAPI proxy. |
+| `react-router.config.ts` | Selects the client-only SPA build with `ssr: false`. |
+| `tsconfig.json` | Strict TypeScript, ES2022/browser libraries, bundler resolution, and `~/*` alias. |
+| `components.json` | shadcn/Base UI aliases, style, CSS entry, and Lucide configuration. |
+| `playwright.config.ts` | Browser-test directory, localhost web server, timeouts, traces, and screenshots. |
+| `Dockerfile` / `.dockerignore` | Optional Node-hosted validation image; not the production IIS path. |
+| `.gitignore` | Excludes dependencies, generated builds/tests, `.env`, and local context files. |
+| `public/favicon.ico` | Browser icon copied into the production artifact. |
+| `public/product-lineage-view.png` | Tested Report Lineage workspace capture shown on Home. |
+| `public/web.config` | IIS API/OpenAPI reverse proxy and SPA route fallback, copied into `build/client`. |
 
-## Application bootstrap and routes
-
-| File | Purpose |
-| --- | --- |
-| `app/routes.ts` | Declares the index route and `workspace/:section?` route. |
-| `app/root.tsx` | HTML shell, global CSS import, `QueryProvider`, route outlet, scroll restoration, `ErrorBoundary`. |
-| `app/app.css` | Tailwind + shadcn + animation + Geist font imports; light/dark tokens, radii, global min-width. |
-| `app/routes/home.tsx` | Product overview, value summary, workflow, setup entry point. |
-| `app/routes/workspace.tsx` | Shared workspace shell: OpenAPI query, endpoint catalog, shared API executor, sidebar/mobile nav, lazy Explorer/Report Lineage. See [02-architecture.md](02-architecture.md). |
-
-## Shared application components
+## Bootstrap And Routes
 
 | File | Purpose |
 | --- | --- |
-| `app/components/app-header.tsx` | Product identity + TanStack Query backend-health badge (refetches every 15s). |
-| `app/components/app-footer.tsx` | Mandatory "Developed by Satyadeep Singh" attribution + copyright year on every page. |
+| `app/routes.ts` | Declares the Home index, `/setup-guide`, and `/workspace/:section?`. |
+| `app/root.tsx` | HTML shell, global CSS, QueryProvider, route outlet, scripts, scroll restoration, and error boundary. |
+| `app/app.css` | Tailwind/shadcn/font imports, design tokens, and global layout rules. |
+| `app/routes/setup-guide.tsx` | Route metadata and shared shell for the static setup handbook. |
+| `app/routes/home.tsx` | `/` database-neutral overview, product preview, evidence path, and single Start action. |
+| `app/routes/workspace.tsx` | Shared shell, OpenAPI catalog/executor, sidebar/mobile navigation, and lazy feature routing. |
 
-## Workspace feature components
-
-| File | Purpose |
-| --- | --- |
-| `app/components/workspace/workspace-sidebar.tsx` | Setup / exploration / report-lineage / API-doc navigation for desktop and mobile shells. |
-| `app/components/workspace/power-bi-setup.tsx` | Device-code / service-principal setup, provider readiness, secret clearing, cache invalidation on success. |
-| `app/components/workspace/database-setup.tsx` | Snowflake connect/status/logout without exposing raw setup JSON. |
-| `app/components/workspace/explorer.tsx` | Workspace-scoped exploration: assets, report detail, semantic objects, mappings, diagrams. ~920 lines — the largest component. |
-| `app/components/workspace/report-lineage.tsx` | Cross-workspace report discovery, composite-model resolution, snapshot preparation, evidence tabs/tables. |
-| `app/components/workspace/report-lineage-diagrams.tsx` | Report/database, column, measure, and calculated-column React Flow graphs with depth controls and evidence copy. |
-| `app/components/workspace/api-documentation.tsx` | Groups/searches OpenAPI operations, expands the selected operation into the execution workbench. |
-| `app/components/workspace/api-execution-panel.tsx` | Parameter/body inputs, JSON validation, execution via `useApiExecutor`, sensitive-value clearing, copyable output. |
-| `app/components/workspace/api-domain-canvas.tsx` | **Retained, unused.** Alternate full-domain operation selector/executor — not routed. |
-| `app/components/workspace/api-output-panel.tsx` | **Retained, unused.** Response renderer for `api-domain-canvas.tsx` only. |
-
-## Lib, state, and API layer
-
-See [04-state-and-api-layer.md](04-state-and-api-layer.md) for behavior.
+## Shared Application Components
 
 | File | Purpose |
 | --- | --- |
-| `app/lib/api-catalog.ts` | OpenAPI/endpoint types, request templates, schema example generation, endpoint flattening, URL construction, response parsing, formatting helpers. |
-| `app/lib/use-api-executor.ts` | Executes a catalog endpoint with cookies, optional admin key, JSON body, timing, normalized results. |
-| `app/lib/query-provider.tsx` | Single app-lifetime `QueryClient` with default retry/stale-time/focus-refetch behavior. |
-| `app/lib/utils.ts` | `cn()` class-name composition (clsx + tailwind-merge) shared by shadcn and custom components. |
-| `app/stores/app-store.ts` | Zustand store: normalized `apiOrigin`, ephemeral `adminKey`. |
+| `app/components/app-header.tsx` | Product identity, active desktop/mobile navigation, and optional backend health query/badge. |
+| `app/components/app-footer.tsx` | Shared links, developer attribution, and current-year copyright on every page. |
+| `app/components/setup-guide/setup-guide.tsx` | Static Microsoft/Fabric/Scanner/XMLA/Snowflake/backend handbook, workflow handoff, troubleshooting, and references. |
 
-## UI primitives (`app/components/ui/`)
-
-Local shadcn/Base UI building blocks — keep feature/application behavior out
-of these files; they should stay pure presentation + accessibility wiring.
-
-`badge.tsx`, `button.tsx`, `card.tsx`, `checkbox.tsx`, `command.tsx`
-(cmdk-based), `dialog.tsx`, `dropdown-menu.tsx`, `input-group.tsx`,
-`input.tsx`, `label.tsx`, `select.tsx` (Base UI), `separator.tsx`,
-`sheet.tsx` (mobile nav drawer), `skeleton.tsx`, `sonner.tsx` (toast host),
-`switch.tsx`, `table.tsx`, `tabs.tsx`, `textarea.tsx` (JSON editors),
-`toast.tsx`, `tooltip.tsx`.
-
-## Tests, local context, and retained scaffold files
+## Workspace Features
 
 | File | Purpose |
 | --- | --- |
-| `tests/report-lineage.spec.ts` | Mocks backend contracts; verifies evidence tabs, exports, report/column/calculation graphs, desktop layout, mobile containment. |
-| `tests/api-documentation.spec.ts` | Mocks OpenAPI/backend operations; verifies GET/POST execution, JSON validation, response metadata, output copying. |
-| `REF_DOC/PROJECT_CONTEXT.md` | Local continuity doc (frontend contracts/constraints); gitignored, not in this repo's history. |
-| `app/welcome/welcome.tsx`, `logo-light.svg`, `logo-dark.svg` | Unused React Router starter scaffold; no current route imports them. |
+| `app/components/workspace/workspace-sidebar.tsx` | Setup, Explorer, report lineage, impact, scanner, and API documentation navigation. |
+| `app/components/workspace/power-bi-setup.tsx` | Device-code/service-principal setup, readiness display, secret clearing, and cache invalidation. |
+| `app/components/workspace/database-setup.tsx` | Snowflake connect/status/logout with guided status instead of raw JSON. |
+| `app/components/workspace/auth-required.tsx` | Shared Power BI authentication-required state and setup link. |
+| `app/components/workspace/explorer.tsx` | Workspace report/model investigation, semantic/source evidence, scanner enrichment, grids, exports, and focused lineage. |
+| `app/components/workspace/report-lineage.tsx` | Estate-wide report selection, snapshot queries, and report evidence tabs/grids. |
+| `app/components/workspace/report-lineage-diagrams.tsx` | Report/database, column, measure, and calculated-column graph builders and controls. |
+| `app/components/workspace/table-impact.tsx` | Scoped table/column impact traversal with report/visual evidence, graph, and grid. |
+| `app/components/workspace/measure-impact.tsx` | Bidirectional measure dependency traversal with report/visual evidence, graph, and grid. |
+| `app/components/workspace/scanner.tsx` | Explicit 1-100 workspace Power BI Admin scan and five-tab result browser. |
+| `app/components/workspace/impact-picker.tsx` | Reusable workspace multi-select and searchable object picker. |
+| `app/components/workspace/impact-grid.tsx` | Reusable copyable/exportable AG Grid for impact and scanner evidence. |
+| `app/components/workspace/api-documentation.tsx` | OpenAPI grouping/search and operation selection. |
+| `app/components/workspace/api-execution-panel.tsx` | Parameter/body validation, endpoint execution, secret clearing, and response output. |
 
-## Local agent reference files
+## Shared Lineage Engine
 
 | File | Purpose |
 | --- | --- |
-| `.agents/skills/react-router/SKILL.md` | Local coding-agent instructions for React Router work (tooling guidance, not runtime code). |
-| `.agents/skills/react-router/references/{framework-mode,data-mode,declarative-mode,rsc}.md` | Per-mode React Router conventions for agents. |
+| `app/components/workspace/lineage/lineage-types.ts` | Shared graph, node, edge, and React Flow node-data contracts. |
+| `app/components/workspace/lineage/lineage-layout.ts` | Dagre layout and dynamic node-height estimation. |
+| `app/components/workspace/lineage/lineage-node.tsx` | Tone-coded custom node with collapse/expand control and hidden count. |
+| `app/components/workspace/lineage/lineage-diagram.tsx` | Visible subgraph derivation, collapse state, layout, React Flow rendering, controls, and arrowheads. |
 
-## Known dead/retained code
+## API, Query, State, And Export Utilities
 
-Don't delete without a deliberate cleanup decision, but don't build new
-features on top of these either without checking they're still intended to
-stay:
+| File | Purpose |
+| --- | --- |
+| `app/lib/api-catalog.ts` | Runtime OpenAPI types/parsing, setup fallbacks, schema body templates, URL construction, and response helpers. |
+| `app/lib/use-api-executor.ts` | Shared cookie-aware endpoint execution, optional ephemeral admin header, timing, and normalized errors. |
+| `app/lib/query-provider.tsx` | Application-lifetime TanStack Query client. |
+| `app/lib/dependency-graph.ts` | Multi-source upstream/downstream DAX closure and conversion to the shared lineage graph. |
+| `app/lib/lineage-api.ts` | Shared authenticated request helper, query keys, report batching, and scoped semantic inventory loading. |
+| `app/lib/scanner-api.ts` | Scanner endpoint functions, safe defaults, and defensive Microsoft scan-result types. |
+| `app/lib/use-workspace-scan.ts` | Submit, four-second status polling, terminal-state handling, and one-time result query. |
+| `app/lib/grid-export.ts` | Parent-context enrichment, clipboard TSV, CSV, and Excel-compatible exports. |
+| `app/lib/utils.ts` | `cn()` class composition helper. |
+| `app/stores/app-store.ts` | Normalized API origin and non-persisted administrative key. |
 
-- `app/components/workspace/api-domain-canvas.tsx`
-- `app/components/workspace/api-output-panel.tsx`
-- `app/welcome/*`
+## UI Primitives
+
+Only primitives imported by a current route dependency are retained:
+
+`badge.tsx`, `button.tsx`, `checkbox.tsx`, `command.tsx`, `dialog.tsx`,
+`input-group.tsx`, `input.tsx`, `label.tsx`, `select.tsx`, `separator.tsx`,
+`sheet.tsx`, and `textarea.tsx`.
+
+## Browser Tests
+
+| File | Purpose |
+| --- | --- |
+| `tests/api-documentation.spec.ts` | API GET/POST execution, JSON validation, result metadata, secret clearing, and mobile containment. |
+| `tests/home.spec.ts` | Home content, one-action contract, database-neutral copy, product image, navigation, and desktop/mobile containment. |
+| `tests/report-lineage.spec.ts` | Report evidence tabs/exports and report, column, and calculation graphs on desktop/mobile. |
+| `tests/impact-analysis.spec.ts` | Workspace scope, searchable table/measure selection, directed/collapsible impact graphs, grids, and degraded evidence. |
+| `tests/scanner.spec.ts` | Scanner submit/poll/result behavior plus dedicated scanner tabs and Explorer enrichment. |
+| `tests/setup-guide.spec.ts` | `/setup-guide` routing, content/references, Home/workspace navigation, page errors, screenshots, and mobile containment. |
+| `REF_DOC/PROJECT_CONTEXT.md` | Local continuity and implementation constraints; ignored by Git unless repository policy changes. |
+
+## CI/CD And Azure Scripts
+
+| File | Purpose |
+| --- | --- |
+| `.github/workflows/ci.yml` | Main/pull-request dependency install, typecheck, and production build. |
+| `.github/workflows/cd.yml` | Main production artifact build, Azure OIDC upload, VM Run Command deployment, and public smoke tests. |
+| `.github/workflows/azure-oidc-test.yml` | Manual federated-identity/resource-group diagnostic. |
+| `.github/workflows/storage-upload-test.yml` | Manual build and Blob Storage upload diagnostic. |
+| `.azure/scripts/download-frontend-artifact.ps1` | VM-managed-identity Blob download and validation. |
+| `.azure/scripts/deploy-frontend.ps1` | Versioned IIS staging, atomic promotion, validation, rollback, release record, and retention cleanup. |
+
+## Local Agent References
+
+`.agents/skills/react-router/` contains coding-agent guidance for React Router
+Framework, Data, Declarative, and RSC modes. It is development context, not
+runtime application code.

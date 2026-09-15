@@ -1,109 +1,125 @@
 # Architecture
 
-## Folder layout
+## Folder Layout
 
 ```text
 PBI-Lineage-Frontend/
-|-- .agents/skills/react-router/      Local coding-agent reference docs for React Router (not runtime code)
+|-- .azure/scripts/                VM Blob download and atomic IIS release scripts
+|-- .agents/skills/react-router/   Local coding-agent references, not runtime code
+|-- .github/workflows/             CI, production CD, Azure OIDC and Blob diagnostics
+|-- Docs/                          Focused contributor documentation
 |-- app/
 |   |-- components/
-|   |   |-- ui/                       shadcn/Base UI primitives (button, dialog, sheet, table, tabs, ...)
-|   |   |-- workspace/                Feature components (setup, explorer, report-lineage, api-docs)
-|   |   |-- app-header.tsx            Product header + backend health badge
-|   |   `-- app-footer.tsx            Attribution/copyright footer
-|   |-- lib/
-|   |   |-- api-catalog.ts            OpenAPI types, parsing, endpoint flattening, request templates
-|   |   |-- use-api-executor.ts       Hook that executes a catalog endpoint against the backend
-|   |   |-- query-provider.tsx        Single app-lifetime QueryClient
-|   |   `-- utils.ts                  cn() class-name helper (clsx + tailwind-merge)
-|   |-- routes/
-|   |   |-- home.tsx                  "/" overview route
-|   |   `-- workspace.tsx             "/workspace/:section?" shell route
-|   |-- stores/app-store.ts           Zustand: apiOrigin + adminKey
-|   |-- welcome/                      Unused React Router scaffold leftovers (no route imports them)
-|   |-- app.css                       Tailwind + shadcn + font imports, design tokens
-|   |-- root.tsx                      HTML shell, QueryProvider, ErrorBoundary
-|   `-- routes.ts                     Route table (React Router Framework Mode)
-|-- public/favicon.ico
-|-- tests/                            Playwright specs
-|-- vite.config.ts, react-router.config.ts, tsconfig.json, components.json
-|-- playwright.config.ts, Dockerfile, package.json
+|   |   |-- setup-guide/           Static setup handbook
+|   |   |-- ui/                    Reachable shadcn/Base UI primitives
+|   |   |-- workspace/             Setup, Explorer, lineage, impact, scanner, API docs
+|   |   |-- app-header.tsx         Product identity, navigation, optional health
+|   |   `-- app-footer.tsx         Navigation, attribution, and copyright
+|   |-- lib/                       OpenAPI, requests, queries, lineage, scanner, exports
+|   |-- routes/                    Home, Setup Guide, and shared workspace shell
+|   |-- stores/app-store.ts        API origin and ephemeral admin key
+|   |-- app.css                    Tailwind, font, theme tokens, global rules
+|   |-- root.tsx                   HTML shell, query provider, error boundary
+|   `-- routes.ts                  React Router Framework Mode route table
+|-- public/                        Product image, favicon, and IIS config copied into build/client
+|-- tests/                         Playwright Home, setup, API, report, impact, and scanner specs
+`-- root build/tool configuration
 ```
 
 Generated `node_modules/`, `.react-router/`, `build/`, `test-results/`, and
-`playwright-report/` are gitignored and omitted above.
+`playwright-report/` directories are ignored and are not deployable source.
+See [05-file-reference.md](05-file-reference.md) for each maintained file.
 
 ## Routing
 
-`app/routes.ts`:
+`app/routes.ts` declares:
 
 ```ts
 index("routes/home.tsx")
+route("setup-guide", "routes/setup-guide.tsx")
 route("workspace/:section?", "routes/workspace.tsx")
 ```
 
-There are only two route files. Everything under `/workspace` is one shell
-(`app/routes/workspace.tsx`) that switches on the `:section` param — it is
-**not** a nested React Router route tree. `workspace.tsx` owns:
+Home is a static, database-neutral product overview and intentionally does
+not request backend health. The Setup Guide is a separate static handbook that
+does not load OpenAPI or provider data.
 
-- The OpenAPI document query (`useQuery(["openapi", apiOrigin], fetchOpenApi)`).
-- Building the endpoint catalog (`flattenEndpoints` + `SETUP_ENDPOINT_DEFINITIONS`
-  fallback for setup operations not yet reflected in the live OpenAPI doc).
-- One shared `useApiExecutor(endpoints)` instance passed down to whichever
-  section is active.
-- Section switching: `database` | `power-bi` (default) | `explorer` |
-  `report-lineage` | anything else → `ApiDocumentation` (with the section
-  used as an OpenAPI tag slug, or `undefined` for `api-docs`).
-- Lazy-loading `Explorer` and `ReportLineage` via `React.lazy` (they pull in
-  AG Grid + XYFlow, which are otherwise unused on lighter routes).
-- Desktop sidebar (`WorkspaceSidebar`) + a mobile `Sheet` drawer, both driven
-  by the same `navigateTo(section)` function.
+All operational views share `app/routes/workspace.tsx`; `:section` is a view
+switch, not a nested route tree. The shell owns:
 
-| Route | Section value | View |
+- The live OpenAPI query and fallback setup endpoint merge.
+- One shared `useApiExecutor` instance.
+- Desktop sidebar and mobile Sheet navigation.
+- Lazy imports for the heavy data/graph views.
+- API documentation fallback for unknown section slugs.
+
+| Route | Section | View |
 | --- | --- | --- |
-| `/` | — | Overview / landing (`home.tsx`) |
-| `/workspace` or `/workspace/power-bi` | `power-bi` (default) | Power BI setup |
+| `/` | none | Product overview |
+| `/setup-guide` | none | Static Setup Guide |
+| `/workspace`, `/workspace/power-bi` | `power-bi` | Power BI setup |
 | `/workspace/database` | `database` | Snowflake setup |
-| `/workspace/explorer` | `explorer` | Workspace-scoped explorer |
-| `/workspace/report-lineage` | `report-lineage` | Cross-workspace report lineage |
-| `/workspace/api-docs` | `api-docs` | Full API documentation |
-| `/workspace/<tag-slug>` | anything else | API documentation prefiltered to one OpenAPI tag |
+| `/workspace/explorer` | `explorer` | Workspace-scoped Explorer |
+| `/workspace/report-lineage` | `report-lineage` | Estate-wide report lineage |
+| `/workspace/table-impact` | `table-impact` | Scoped table or column impact |
+| `/workspace/measure-impact` | `measure-impact` | Bidirectional measure impact |
+| `/workspace/scanner` | `scanner` | Power BI Admin metadata scanner |
+| `/workspace/api-docs` | `api-docs` | Full API documentation/execution |
+| `/workspace/<tag-slug>` | other | API docs prefiltered to one OpenAPI tag |
 
-Unknown top-level routes hit React Router's `ErrorBoundary` in `root.tsx` in
-dev; production IIS needs a SPA-fallback rewrite rule (see
-[06-testing-and-deployment.md](06-testing-and-deployment.md)) since there is
-no server-side routing (`ssr: false` in `react-router.config.ts`).
+Unknown top-level routes reach `root.tsx`'s error boundary in development.
+Because `react-router.config.ts` sets `ssr: false`, IIS must rewrite unknown
+non-file/non-directory routes to `/index.html`.
 
-## Build & tooling configuration
+## Lazy Feature Boundary
 
-- **`vite.config.ts`** — registers the `reactRouter()` and `tailwindcss()`
-  plugins, resolves `~/*` via `tsconfigPaths`, force-prebundles
-  `@tanstack/react-query`, `@xyflow/react`, `ag-grid-community`, and
-  `ag-grid-react` (they're behind lazy routes and would otherwise cause a
-  slow first dynamic import), and proxies `/api`, `/openapi.json`, `/docs`
-  to `http://127.0.0.1:8000` in dev.
-- **`react-router.config.ts`** — `ssr: false`; this is a client-only SPA
-  build intended for static IIS hosting, not a Node SSR server (the `start`
-  script / Dockerfile exist only for optional non-IIS validation).
-- **`tsconfig.json`** — strict TypeScript, browser/ES2022 libs, bundler
-  module resolution, `~/*` path alias into `app/`.
-- **`components.json`** — shadcn config: style, aliases, Tailwind entry
-  (`app/app.css`), Base UI, Lucide icons.
-- **`playwright.config.ts`** — test dir `tests/`, reuses/starts the dev
-  server on `localhost:5173`.
+Explorer, Report Lineage, Table Impact, Measure Impact, and Scanner are loaded
+with `React.lazy` and a common Suspense fallback. This keeps AG Grid, XYFlow,
+and Dagre out of setup/API-documentation route chunks. Because React Router's
+virtual entry can discover lazy dependencies in later waves, `vite.config.ts`
+prebundles the complete runtime bare-import set. This prevents a new optimizer
+generation from invalidating modules already requested by the browser during
+the first analysis navigation.
 
-## Request flow (high level)
+## Shared Lineage Boundary
 
+Feature components build a renderer-independent `LineageGraph` from
+`lineage-types.ts`. `dependency-graph.ts` computes upstream/downstream DAX
+closures; `lineage-layout.ts` places visible nodes with Dagre;
+`lineage-node.tsx` renders collapsible object nodes; and
+`lineage-diagram.tsx` owns visibility state plus React Flow rendering. This
+keeps traversal and layout rules consistent across Explorer, Report Lineage,
+Table Impact, and Measure Impact.
+
+## Request Flow
+
+```text
+Browser React app
+  -> fetch(credentials: "include")
+  -> Vite proxy in development OR same-origin IIS rewrite in production
+  -> FastAPI /api/v1/* or /openapi.json
+  -> Microsoft Graph / Power BI / Fabric and optional Snowflake
+  <- JSON and backend-managed HTTP-only session cookie
 ```
-Browser (React app)
-  -> fetch(..., { credentials: "include" })
-  -> same-origin in prod (IIS proxy) / Vite proxy in dev
-  -> FastAPI backend (/api/v1/*, /openapi.json)
-       -> Microsoft Graph / Power BI / Fabric APIs
-       -> optional Snowflake
-  <- JSON response + Set-Cookie (session)
-```
 
-The frontend never talks to Microsoft/Fabric/Snowflake directly — FastAPI is
-the only upstream dependency, and all session state lives in backend
-HTTP-only cookies.
+The frontend never calls Microsoft, Fabric, or Snowflake directly. Shared
+request helpers normalize the API origin, send cookies, and attach the optional
+administrative key only from ephemeral Zustand memory.
+
+## Build And Runtime
+
+- `vite.config.ts`: React Router and Tailwind plugins, `~/*` resolution,
+  explicit lazy-route dependency prebundling, and local proxy to
+  `127.0.0.1:8000`.
+- `react-router.config.ts`: client-only SPA output.
+- `public/web.config`: `/api/*` and `/openapi.json` reverse proxy followed by
+  SPA fallback.
+- `playwright.config.ts`: local Vite server and browser-test artifacts.
+- `.github/workflows/ci.yml`: Node 22 install, typecheck, and build gate.
+- `.github/workflows/cd.yml`: release ZIP, Azure OIDC, Blob upload, VM Run
+  Command, IIS deployment, and public smoke tests.
+- `.azure/scripts/`: VM-managed-identity download, versioned release staging,
+  IIS promotion, validation, rollback, release recording, and pruning.
+
+Production serves only `build/client`; `npm run dev` and the optional Node
+server are not production hosting mechanisms.
