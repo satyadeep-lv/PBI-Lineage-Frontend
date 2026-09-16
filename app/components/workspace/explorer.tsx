@@ -39,6 +39,7 @@ import { DEFAULT_SCAN_FLAGS, workspacePayload, type ScannerWorkspace } from "~/l
 import { useWorkspaceScan } from "~/lib/use-workspace-scan";
 import { cn } from "~/lib/utils";
 import { useAppStore } from "~/stores/app-store";
+import { usePowerAiStore } from "~/stores/power-ai-store";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -208,6 +209,20 @@ export function Explorer() {
   const workspaces = workspacesQuery.data?.workspaces ?? [];
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null;
   const scan = useWorkspaceScan(apiOrigin, selectedWorkspace ? [selectedWorkspace.id] : [], DEFAULT_SCAN_FLAGS);
+
+  useEffect(() => {
+    usePowerAiStore.getState().mergeContext({
+      workspaceId: selectedWorkspace?.id,
+      workspaceName: selectedWorkspace?.name,
+      reportId: undefined,
+      reportName: undefined,
+      semanticModelId: undefined,
+      semanticModelName: undefined,
+      objectType: undefined,
+      objectId: undefined,
+      objectName: undefined,
+    });
+  }, [selectedWorkspace]);
 
   useEffect(() => {
     if (workspaces.length && !workspaces.some((workspace) => workspace.id === selectedWorkspaceId)) {

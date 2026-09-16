@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { AskPowerAiButton } from "~/components/power-ai/ask-power-ai-button";
 import { PowerBiAuthRequired } from "~/components/workspace/auth-required";
 import { ImpactGrid } from "~/components/workspace/impact-grid";
 import { ObjectSearchSelect, WorkspaceScopeSelect, type SearchEntry } from "~/components/workspace/impact-picker";
@@ -31,6 +32,7 @@ import {
 } from "~/lib/lineage-api";
 import { cn } from "~/lib/utils";
 import { useAppStore } from "~/stores/app-store";
+import { usePowerAiStore } from "~/stores/power-ai-store";
 
 type Workspace = { id: string; name: string };
 type WorkspaceResponse = { workspaces: Workspace[] };
@@ -124,6 +126,21 @@ export function TableImpact() {
   const evidenceIndex = useMemo(() => buildEvidenceIndex(evidenceQuery.data), [evidenceQuery.data]);
   const rows = useMemo(() => buildImpactRows(hops, evidenceIndex, direction), [hops, evidenceIndex, direction]);
   const context = { parent_workspace_name: selectedEntry?.workspaceName ?? "", parent_workspace_id: selectedEntry?.workspaceId ?? "", parent_semantic_model_name: selectedEntry?.semanticModelName ?? "", parent_semantic_model_id: selectedEntry?.semanticModelId ?? "", parent_table_name: selectedEntry?.tableName ?? "" };
+  const selectedColumnName = selectedColumnKey === WHOLE_TABLE ? undefined : selectedColumnKey;
+
+  useEffect(() => {
+    usePowerAiStore.getState().mergeContext({
+      workspaceId: selectedEntry?.workspaceId,
+      workspaceName: selectedEntry?.workspaceName,
+      semanticModelId: selectedEntry?.semanticModelId,
+      semanticModelName: selectedEntry?.semanticModelName,
+      reportId: undefined,
+      reportName: undefined,
+      objectType: selectedEntry ? (selectedColumnName ? "column" : "table") : undefined,
+      objectId: selectedEntry ? `${selectedEntry.key}${selectedColumnName ? `:${selectedColumnName}` : ""}` : undefined,
+      objectName: selectedEntry ? (selectedColumnName ? `${selectedEntry.tableName}[${selectedColumnName}]` : selectedEntry.tableName) : undefined,
+    });
+  }, [selectedEntry, selectedColumnName]);
 
   if (workspacesQuery.isLoading) return <LoadingState label="Loading Power BI workspaces" />;
   if (workspacesQuery.isError) return <PowerBiAuthRequired returnTo="Table impact" />;
@@ -155,6 +172,20 @@ export function TableImpact() {
       {selectedEntry && <>
         <ExactLineageStatus loading={daxQuery.isLoading} error={daxQuery.isError} dax={daxQuery.data} />
         <EvidenceStatus estateError={estateQuery.isError} boundCount={boundReports.length} loading={evidenceQuery.isLoading} truncated={Boolean(evidenceQuery.data?.[0]?.truncated || evidenceQuery.data?.[1]?.truncated)} totalBound={boundReports.length} />
+        <div className="flex justify-end">
+          <AskPowerAiButton
+            context={{
+              workspaceId: selectedEntry.workspaceId,
+              workspaceName: selectedEntry.workspaceName,
+              semanticModelId: selectedEntry.semanticModelId,
+              semanticModelName: selectedEntry.semanticModelName,
+              objectType: selectedColumnName ? "column" : "table",
+              objectId: `${selectedEntry.key}${selectedColumnName ? `:${selectedColumnName}` : ""}`,
+              objectName: selectedColumnName ? `${selectedEntry.tableName}[${selectedColumnName}]` : selectedEntry.tableName,
+            }}
+            question={selectedColumnName ? `Explain the ${selectedEntry.tableName}[${selectedColumnName}] column` : `Explain the ${selectedEntry.tableName} table`}
+          />
+        </div>
         <LineageDiagram
           direction="LR"
           graph={graph}

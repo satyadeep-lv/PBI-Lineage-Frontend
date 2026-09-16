@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { AskPowerAiButton } from "~/components/power-ai/ask-power-ai-button";
 import { PowerBiAuthRequired } from "~/components/workspace/auth-required";
 import { ImpactGrid } from "~/components/workspace/impact-grid";
 import { ObjectSearchSelect, WorkspaceScopeSelect, type SearchEntry } from "~/components/workspace/impact-picker";
@@ -30,6 +31,7 @@ import {
 } from "~/lib/lineage-api";
 import { cn } from "~/lib/utils";
 import { useAppStore } from "~/stores/app-store";
+import { usePowerAiStore } from "~/stores/power-ai-store";
 
 type Workspace = { id: string; name: string };
 type WorkspaceResponse = { workspaces: Workspace[] };
@@ -117,6 +119,20 @@ export function MeasureImpact() {
   const rows = useMemo(() => buildImpactRows(closure.upstream, closure.downstream, evidenceIndex), [closure, evidenceIndex]);
   const context = { parent_workspace_name: selectedEntry?.workspaceName ?? "", parent_workspace_id: selectedEntry?.workspaceId ?? "", parent_semantic_model_name: selectedEntry?.semanticModelName ?? "", parent_semantic_model_id: selectedEntry?.semanticModelId ?? "", parent_measure_name: selectedEntry?.measureName ?? "" };
 
+  useEffect(() => {
+    usePowerAiStore.getState().mergeContext({
+      workspaceId: selectedEntry?.workspaceId,
+      workspaceName: selectedEntry?.workspaceName,
+      semanticModelId: selectedEntry?.semanticModelId,
+      semanticModelName: selectedEntry?.semanticModelName,
+      reportId: undefined,
+      reportName: undefined,
+      objectType: selectedEntry ? "measure" : undefined,
+      objectId: selectedEntry?.key,
+      objectName: selectedEntry ? `${selectedEntry.tableName}[${selectedEntry.measureName}]` : undefined,
+    });
+  }, [selectedEntry]);
+
   if (workspacesQuery.isLoading) return <LoadingState label="Loading Power BI workspaces" />;
   if (workspacesQuery.isError) return <PowerBiAuthRequired returnTo="Measure impact" />;
   if (!workspaces.length) return <EmptyState title="No Power BI workspaces found" text="The authenticated account did not return any workspaces to explore." />;
@@ -145,6 +161,20 @@ export function MeasureImpact() {
       {selectedEntry && <>
         <ExactLineageStatus loading={daxQuery.isLoading} error={daxQuery.isError} dax={daxQuery.data} />
         <EvidenceStatus estateError={estateQuery.isError} boundCount={boundReports.length} loading={evidenceQuery.isLoading} truncated={Boolean(evidenceQuery.data?.[0]?.truncated || evidenceQuery.data?.[1]?.truncated)} totalBound={boundReports.length} />
+        <div className="flex justify-end">
+          <AskPowerAiButton
+            context={{
+              workspaceId: selectedEntry.workspaceId,
+              workspaceName: selectedEntry.workspaceName,
+              semanticModelId: selectedEntry.semanticModelId,
+              semanticModelName: selectedEntry.semanticModelName,
+              objectType: "measure",
+              objectId: selectedEntry.key,
+              objectName: `${selectedEntry.tableName}[${selectedEntry.measureName}]`,
+            }}
+            question="Explain this measure"
+          />
+        </div>
         <LineageDiagram
           direction="LR"
           graph={graph}

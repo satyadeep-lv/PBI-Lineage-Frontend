@@ -20,11 +20,13 @@ import { useEffect, useMemo, useState } from "react";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { AskPowerAiButton } from "~/components/power-ai/ask-power-ai-button";
 import { PowerBiAuthRequired } from "~/components/workspace/auth-required";
 import { ReportLineageDiagrams } from "~/components/workspace/report-lineage-diagrams";
 import { readJsonResponse } from "~/lib/api-catalog";
 import { cn } from "~/lib/utils";
 import { useAppStore } from "~/stores/app-store";
+import { usePowerAiStore } from "~/stores/power-ai-store";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -159,6 +161,20 @@ export function ReportLineage() {
     retry: false,
   });
 
+  useEffect(() => {
+    usePowerAiStore.getState().mergeContext({
+      workspaceId: selectedReport?.workspaceId,
+      workspaceName: selectedReport?.workspaceName,
+      reportId: selectedReport?.report.id,
+      reportName: selectedReport?.report.name,
+      semanticModelId: selectedReport?.semanticModelId ?? undefined,
+      semanticModelName: selectedReport?.semanticModelName ?? undefined,
+      objectType: selectedReport ? "report" : undefined,
+      objectId: selectedReport?.report.id,
+      objectName: selectedReport?.report.name,
+    });
+  }, [selectedReport]);
+
   if (estateQuery.isLoading) return <LoadingState label="Discovering reports across accessible workspaces" />;
   if (estateQuery.isError) return <PowerBiAuthRequired returnTo="Report lineage" />;
   if (!reportChoices.length) return <EmptyState title="No reports found" text="No accessible reports were returned by estate discovery." />;
@@ -167,7 +183,25 @@ export function ReportLineage() {
     <div className="border-b border-zinc-200 px-5 py-5 sm:px-6">
       <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-start">
         <div className="flex items-start gap-3"><span className="flex size-10 shrink-0 items-center justify-center rounded-[8px] bg-cyan-800 text-white"><GitBranch className="size-5" /></span><div><div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-cyan-800">Cross-workspace analysis</span><Badge className="rounded-[8px] border border-cyan-200 bg-cyan-50 text-cyan-900">Report focused</Badge></div><h1 className="text-lg font-semibold">Report lineage</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">Select any accessible report by name to inspect its database, semantic, DAX, page, visual, and source-mapping evidence.</p></div></div>
-        <ReportSelector reports={reportChoices} selectedKey={selectedKey} onChange={setSelectedKey} />
+        <div className="flex shrink-0 flex-col items-start gap-2 xl:items-end">
+          <ReportSelector reports={reportChoices} selectedKey={selectedKey} onChange={setSelectedKey} />
+          {selectedReport && (
+            <AskPowerAiButton
+              context={{
+                workspaceId: selectedReport.workspaceId,
+                workspaceName: selectedReport.workspaceName,
+                reportId: selectedReport.report.id,
+                reportName: selectedReport.report.name,
+                semanticModelId: selectedReport.semanticModelId ?? undefined,
+                semanticModelName: selectedReport.semanticModelName ?? undefined,
+                objectType: "report",
+                objectId: selectedReport.report.id,
+                objectName: selectedReport.report.name,
+              }}
+              question="Explain this report"
+            />
+          )}
+        </div>
       </div>
       {selectedReport && <div className="mt-5 grid border-y border-zinc-200 sm:grid-cols-4"><Detail label="Workspace" value={selectedReport.workspaceName} /><Detail label="Report" value={selectedReport.report.name} /><Detail label="Semantic model" value={selectedReport.semanticModelName ?? "Unresolved"} /><Detail label="Report type" value={selectedReport.report.report_type ?? "Not reported"} /></div>}
     </div>

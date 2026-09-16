@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Menu } from "lucide-react";
-import { lazy, Suspense, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Loader2, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { lazy, Suspense, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useLocation, useNavigate, useParams } from "react-router";
 
 import type { Route } from "./+types/workspace";
 import { AppFooter } from "~/components/app-footer";
@@ -21,6 +21,8 @@ import {
 import { fetchOpenApi, flattenEndpoints, SETUP_ENDPOINT_DEFINITIONS } from "~/lib/api-catalog";
 import { useApiExecutor } from "~/lib/use-api-executor";
 import { useAppStore } from "~/stores/app-store";
+import { LEFT_SIDEBAR_COLLAPSED_WIDTH, LEFT_SIDEBAR_EXPANDED_WIDTH, useLayoutStore } from "~/stores/layout-store";
+import { usePowerAiStore } from "~/stores/power-ai-store";
 
 const Explorer = lazy(() =>
   import("~/components/workspace/explorer").then((module) => ({ default: module.Explorer })),
@@ -45,9 +47,16 @@ export function meta({}: Route.MetaArgs) {
 export default function Workspace() {
   const { section } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const apiOrigin = useAppStore((state) => state.apiOrigin);
   const [mobileNavigationOpen, setMobileNavigationOpen] = useState(false);
+  const leftCollapsed = useLayoutStore((state) => state.leftCollapsed);
+  const toggleLeftCollapsed = useLayoutStore((state) => state.toggleLeftCollapsed);
   const activeSection = section ?? "power-bi";
+
+  useEffect(() => {
+    usePowerAiStore.getState().mergeContext({ route: location.pathname });
+  }, [location.pathname]);
 
   const openApiQuery = useQuery({
     queryKey: ["openapi", apiOrigin],
@@ -87,7 +96,8 @@ export default function Workspace() {
     <div className="flex min-h-screen flex-col bg-[#f4f6f8] text-zinc-950">
       <AppHeader />
 
-      <div className="border-b border-zinc-200 bg-white px-4 py-2 lg:hidden">
+      {/* Mobile-only nav drawer trigger. */}
+      <div className="border-b border-zinc-200 bg-white px-4 py-2 md:hidden">
         <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
           <SheetTrigger render={<Button variant="outline" size="sm" />}>
             <Menu className="size-4" />
@@ -102,9 +112,33 @@ export default function Workspace() {
         </Sheet>
       </div>
 
-      <div className="mx-auto grid w-full max-w-screen-2xl flex-1 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="hidden border-r border-zinc-200 lg:block">
-          <div className="sticky top-0 h-[calc(100vh-4rem)]">{sidebar}</div>
+      <div
+        className="mx-auto grid w-full max-w-screen-2xl flex-1 md:grid-cols-[64px_minmax(0,1fr)] xl:grid-cols-[var(--left-w)_minmax(0,1fr)]"
+        style={{ "--left-w": leftCollapsed ? LEFT_SIDEBAR_COLLAPSED_WIDTH : LEFT_SIDEBAR_EXPANDED_WIDTH } as CSSProperties}
+      >
+        {/* Left nav: hidden below md (mobile uses the Sheet above); a fixed icon rail at tablet; full/collapsible at xl+. */}
+        <aside className="hidden border-r border-zinc-200 md:block">
+          <div className="xl:hidden">
+            <div className="sticky top-0 h-[calc(100vh-4rem)]">
+              <WorkspaceSidebar activeSection={activeSection} apiOperationCount={endpoints.length} onNavigate={navigateTo} collapsed />
+            </div>
+          </div>
+          <div className="hidden h-full xl:flex xl:flex-col">
+            <div className="sticky top-0 flex h-[calc(100vh-4rem)] flex-col">
+              <div className="min-h-0 flex-1">
+                <WorkspaceSidebar activeSection={activeSection} apiOperationCount={endpoints.length} onNavigate={navigateTo} collapsed={leftCollapsed} />
+              </div>
+              <button
+                type="button"
+                onClick={toggleLeftCollapsed}
+                aria-label={leftCollapsed ? "Expand navigation" : "Collapse navigation"}
+                title={leftCollapsed ? "Expand navigation" : "Collapse navigation"}
+                className="flex shrink-0 items-center justify-center gap-2 border-t border-zinc-200 bg-[#fafbfc] py-2.5 text-zinc-400 hover:text-zinc-950"
+              >
+                {leftCollapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+              </button>
+            </div>
+          </div>
         </aside>
 
         <main className="min-w-0 p-4 sm:p-6 lg:p-8">

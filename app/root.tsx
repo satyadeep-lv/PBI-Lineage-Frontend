@@ -9,9 +9,10 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { PowerAiWidget } from "./components/power-ai/power-ai-widget";
 import { QueryProvider } from "./lib/query-provider";
 
-export const links: Route.LinksFunction = () => [];
+export const links: Route.LinksFunction = () => [{ rel: "icon", type: "image/png", href: "/tab_logo.png" }];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -23,7 +24,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <Links />
       </head>
       <body>
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          {children}
+          <PowerAiWidget />
+        </QueryProvider>
         <ScrollRestoration />
         <Scripts />
       </body>

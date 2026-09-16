@@ -4,7 +4,6 @@ import {
   CircleAlert,
   Loader2,
   Menu,
-  Workflow,
 } from "lucide-react";
 import { Link, useLocation } from "react-router";
 
@@ -68,8 +67,8 @@ export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
     <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/95 backdrop-blur-sm">
       <div className="mx-auto flex min-h-16 max-w-screen-2xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex min-w-0 items-center gap-3" aria-label="PBI Lineage Explorer home">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-[8px] bg-zinc-950 text-white">
-            <Workflow className="size-5" />
+          <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-zinc-950">
+            <img src="/tab_logo.png" alt="" className="size-full object-cover" />
           </span>
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold text-zinc-950 sm:text-base">
