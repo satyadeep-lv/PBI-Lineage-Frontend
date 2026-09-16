@@ -15,7 +15,7 @@ export function meta({}: Route.MetaArgs) {
 
 export default function SetupGuideRoute() {
   return (
-    <div className="flex min-h-screen flex-col bg-[#f7f9fb] text-zinc-950">
+    <div className="flex min-h-screen flex-col bg-[#e7f2f3] text-zinc-950">
       <AppHeader />
       <SetupGuide />
       <AppFooter />

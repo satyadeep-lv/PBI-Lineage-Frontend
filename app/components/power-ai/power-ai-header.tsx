@@ -9,7 +9,7 @@ export function PowerAiHeader({ onCollapse }: { onCollapse?: () => void }) {
   return (
     <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-4 py-3">
       <div className="flex min-w-0 items-center gap-2">
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-[8px] bg-gradient-to-br from-violet-600 to-cyan-600 text-white">
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-[8px] bg-teal-700 text-white">
           <Sparkles className="size-4" />
         </span>
         <h2 className="min-w-0 truncate text-sm font-semibold text-zinc-950">Power AI</h2>

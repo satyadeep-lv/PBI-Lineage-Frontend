@@ -139,27 +139,27 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="border-b border-zinc-800 bg-zinc-950 text-white">
+        <section className="border-b border-zinc-200 bg-[#edf4f2]">
           <div className="mx-auto max-w-screen-2xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
             <div className="max-w-2xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-400">One connected evidence path</p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-normal sm:text-4xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-teal-700">One connected evidence path</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-normal text-zinc-950 sm:text-4xl">
                 From physical source to business-facing asset.
               </h2>
             </div>
 
-            <div className="mt-10 grid border-y border-zinc-800 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-10 grid border-y border-zinc-300 sm:grid-cols-2 lg:grid-cols-4">
               {evidenceLayers.map((layer, index) => (
                 <article
                   key={layer.label}
-                  className={`min-h-52 py-7 sm:px-6 ${index > 0 ? "border-t border-zinc-800 sm:border-t-0" : ""} ${index % 2 === 1 ? "sm:border-l" : ""} ${index > 1 ? "lg:border-l" : ""}`}
+                  className={`min-h-52 py-7 sm:px-6 ${index > 0 ? "border-t border-zinc-300 sm:border-t-0" : ""} ${index % 2 === 1 ? "sm:border-l sm:border-zinc-300" : ""} ${index > 1 ? "lg:border-l lg:border-zinc-300" : ""}`}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <layer.icon className="size-5 text-cyan-400" />
+                    <layer.icon className="size-5 text-teal-700" />
                     <span className="font-mono text-xs text-zinc-500">0{index + 1}</span>
                   </div>
-                  <h3 className="mt-8 text-base font-semibold">{layer.label}</h3>
-                  <p className="mt-3 text-sm leading-6 text-zinc-400">{layer.detail}</p>
+                  <h3 className="mt-8 text-base font-semibold text-zinc-950">{layer.label}</h3>
+                  <p className="mt-3 text-sm leading-6 text-zinc-600">{layer.detail}</p>
                 </article>
               ))}
             </div>

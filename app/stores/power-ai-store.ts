@@ -1,29 +1,11 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-export type PowerAiAudience = "general" | "business" | "developer";
+import type { AiChatResponseStatus, EvidenceItem, GroundedClaim, PowerAIContext, PowerAiAudience } from "~/lib/power-ai-api";
 
-/** Identifiers only — never full lineage graphs or snapshot payloads sent through the browser for chat context. */
-export type PowerAIContext = {
-  workspaceId?: string;
-  workspaceName?: string;
-  reportId?: string;
-  reportName?: string;
-  semanticModelId?: string;
-  semanticModelName?: string;
-  pageId?: string;
-  objectType?: "report" | "visual" | "semantic_model" | "table" | "column" | "calculated_column" | "measure" | "source_object";
-  objectId?: string;
-  objectName?: string;
-  route?: string;
-};
-
-export type PowerAiEvidenceItem = {
-  label: string;
-  value: string;
-  /** Only shown in "developer" audience mode. */
-  technical?: boolean;
-};
+// Re-exported so existing `from "~/stores/power-ai-store"` imports keep working —
+// app/lib/power-ai-api.ts is the canonical source for these two types.
+export type { PowerAIContext, PowerAiAudience };
 
 export type ChatMessage = {
   id: string;
@@ -31,7 +13,16 @@ export type ChatMessage = {
   text: string;
   /** True while an assistant message is still receiving streamed tokens. */
   pending?: boolean;
-  evidence?: PowerAiEvidenceItem[];
+  /** Backend-verified facts grounding this answer. Never fabricated or completed by the frontend. */
+  evidence?: EvidenceItem[];
+  /** Backend-supplied claim -> evidence mappings. Only rendered, never computed locally. */
+  claims?: GroundedClaim[];
+  /** How well-grounded this answer is; "answered" is the only fully-resolved state. */
+  status?: AiChatResponseStatus;
+  /** Backend-supplied contextual follow-ups for this specific answer. */
+  suggestedQuestions?: string[];
+  /** Which backend agent produced this answer, if the backend reports one. */
+  agent?: string;
   createdAt: number;
 };
 

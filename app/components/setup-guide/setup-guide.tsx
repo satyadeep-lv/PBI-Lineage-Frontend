@@ -76,7 +76,7 @@ npm.cmd run dev`;
 
 export function SetupGuide() {
   return (
-    <main className="flex-1 bg-[#f7f9fb]">
+    <main className="flex-1 bg-[#e7f2f3]">
       <section className="border-b border-zinc-200 bg-white">
         <div className="mx-auto max-w-screen-2xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
           <div className="max-w-4xl">

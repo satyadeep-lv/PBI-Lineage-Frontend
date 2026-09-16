@@ -5,6 +5,9 @@ import { createJSONStorage, persist } from "zustand/middleware";
  * Persisted desktop chrome preferences only — pure UI state, nothing sensitive.
  * Deliberately kept out of app-store.ts, which is never persisted (it can hold
  * an ephemeral admin key; see the comment on requestJson in lib/lineage-api.ts).
+ * Mobile/tablet drawer open state is intentionally NOT here — it stays local
+ * component state (or power-ai-store's non-persisted `widgetOpen`), so it
+ * never persists across reloads.
  */
 type LayoutState = {
   leftCollapsed: boolean;

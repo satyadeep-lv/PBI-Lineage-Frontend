@@ -64,17 +64,17 @@ export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
   });
 
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur-sm">
       <div className="mx-auto flex min-h-16 max-w-screen-2xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex min-w-0 items-center gap-3" aria-label="PBI Lineage Explorer home">
-          <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-zinc-950">
+          <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-white">
             <img src="/tab_logo.png" alt="" className="size-full object-cover" />
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-zinc-950 sm:text-base">
+            <span className="block truncate text-sm font-semibold text-white sm:text-base">
               PBI Lineage Explorer
             </span>
-            <span className="hidden truncate text-xs text-zinc-500 sm:block">
+            <span className="hidden truncate text-xs text-zinc-400 sm:block">
               Analytics lineage and impact intelligence
             </span>
           </span>
@@ -93,7 +93,7 @@ export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="lg:hidden"
+                  className="text-white hover:bg-white/10 hover:text-white lg:hidden"
                   aria-label="Open navigation menu"
                 />
               }
@@ -150,8 +150,8 @@ function HeaderNavigation({ pathname }: { pathname: string }) {
             to={item.to}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "relative flex items-center px-3 text-sm font-medium text-zinc-600 transition-colors hover:text-zinc-950 lg:px-4",
-              active && "text-zinc-950 after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-zinc-950 lg:after:inset-x-4",
+              "relative flex items-center px-3 text-sm font-medium text-zinc-400 transition-colors hover:text-white lg:px-4",
+              active && "text-white after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-white lg:after:inset-x-4",
             )}
           >
             {item.label}

@@ -93,7 +93,7 @@ export default function Workspace() {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#f4f6f8] text-zinc-950">
+    <div className="flex min-h-screen flex-col bg-[#e7f2f3] text-zinc-950">
       <AppHeader />
 
       {/* Mobile-only nav drawer trigger. */}
