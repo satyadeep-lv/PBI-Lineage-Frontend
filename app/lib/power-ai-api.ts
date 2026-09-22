@@ -2,12 +2,10 @@ import { readJsonResponse } from "~/lib/api-catalog";
 import { useAppStore } from "~/stores/app-store";
 
 /**
- * Client for the backend's Power AI API. This endpoint family does not exist in
- * PBI-Lineage-Backend yet — every type below is this frontend's best-effort
- * mapping of the strict, evidence-grounded contract it was asked to build
- * against. The frontend never talks to an AI provider directly and never
- * knows which provider (if any) the backend uses; it only knows these three
- * versioned, authenticated routes. This file is the single canonical source
+ * Client for the backend's versioned, evidence-grounded Power AI API. The
+ * frontend never talks to an AI provider directly and never knows which
+ * provider (if any) the backend uses; it only knows the three authenticated
+ * `/api/v1/ai/*` routes. This file is the single canonical source
  * for every Power AI wire type — the store and components import from here
  * (re-exported by power-ai-store.ts for convenience) rather than redeclaring
  * shapes, so the contract can't drift.

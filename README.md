@@ -9,6 +9,24 @@ deploys both services on the same Windows Azure VM behind
 
 Developed by **Satyadeep Singh**.
 
+## Latest Changes
+
+- Added one global, lazy-loaded Power AI launcher and floating panel across
+  Home, Setup Guide, workspace, and API routes.
+- Added evidence/claim rendering, context-aware questions, general/business/
+  developer audiences, SSE streaming with cancellation, non-streaming fallback,
+  and distinct disabled/auth/permission/provider states.
+- Added persistent desktop navigation collapse, a tablet icon rail, and
+  independent mobile navigation and Power AI drawers.
+- Added `app-shell.spec.ts` and `power-ai.spec.ts` coverage for the new shell,
+  status gating, context, transport, evidence, errors, and responsive state.
+- Moved frontend production artifacts to an ORAS/ACR release path while keeping
+  atomic IIS promotion and rollback.
+- Removed the unreachable `ui/sonner.tsx` primitive that referenced uninstalled
+  `sonner` and `next-themes` packages and caused clean GitHub typecheck failures.
+- Added backend GitHub `production` switches for `ENABLE_API_DOCS` and
+  `AI_ENABLED`; the frontend deliberately has no duplicate AI feature flag.
+
 ## What This Project Does
 
 The application turns the backend API surface into guided operational views:
@@ -32,6 +50,9 @@ The application turns the backend API surface into guided operational views:
   to 100 at once from a dedicated Scanner page) to see dashboards, app
   linkage, ownership, datasource instances and misconfiguration, and
   per-table M-query source expressions.
+- Use the global Power AI panel on every route for evidence-grounded answers,
+  persona-specific explanations, streamed responses, citations, and contextual
+  questions seeded from impact-analysis selections.
 - Copy individual table values or full tables for analysis.
 - Download table data as CSV or Excel-compatible `.xls` files with parent
   workspace, report, and semantic-model context.
@@ -105,14 +126,14 @@ Never add generated `node_modules/`, `.react-router/`, `build/`,
 | Components | shadcn/ui with Base UI | Accessible buttons, inputs, dialogs, sheets, tabs, and related primitives. |
 | Icons | Lucide React | Consistent interface icons. |
 | Server state | TanStack Query v5 | API caching, loading/error states, invalidation, and background preparation. |
-| UI state | Zustand | API origin and ephemeral administrative key state. |
+| UI state | Zustand | API origin/admin key, persisted desktop layout preference, and minimally persisted Power AI audience preference. |
 | Graphs | XYFlow / React Flow with `@dagrejs/dagre` layout | Directed, auto-laid-out, collapsible report, column, measure, table-impact, and measure-impact diagrams. |
 | Tables | AG Grid Community | Sortable/filterable analysis tables and selectable values. |
 | Forms | React Hook Form and Zod | Setup form state and validation. |
 | API catalog | Runtime OpenAPI parser | Discovers and groups current FastAPI operations. |
 | API generation | Orval installed | Available for future generated clients; no generated Orval client is currently committed. |
 | Unit/component tests | Vitest and React Testing Library installed | Test dependencies are ready; focused unit suites have not yet been added. |
-| E2E | Playwright | API execution, report lineage, impact analysis, and scanner browser coverage. |
+| E2E | Playwright | Home/setup, app shell, Power AI, API execution, lineage, impact, and scanner browser coverage. |
 | Production frontend | IIS static site on Azure VM | Serves versioned `build/client` releases and provides SPA fallback/reverse proxy rules. |
 | Production backend | Windows Docker deployment on the same VM | FastAPI remains independently built and operated behind IIS. |
 
@@ -176,6 +197,27 @@ Behavior:
 - Cross-origin production deployment requires matching backend CORS and cookie
   `SameSite`/`Secure` configuration. Same-origin proxying is strongly preferred.
 
+### Power AI configuration
+
+The frontend has no `VITE_AI_ENABLED` setting and must never receive an AI
+provider key. It calls the authenticated backend status endpoint and renders
+the returned state:
+
+```text
+GET /api/v1/ai/status
+```
+
+The backend owns `AI_ENABLED`, provider configuration, credentials, evidence
+grounding, and authorization. Locally, set `AI_ENABLED=true` in the backend
+`.env` and restart FastAPI. In production, use the backend repository's GitHub
+`production` environment variable `AI_ENABLED`; changing it requires a Backend
+CD redeployment because it becomes a container environment variable.
+
+The current automated deployment uses the deterministic `fake` provider. Real
+provider credentials belong in Azure Key Vault and must never be added to this
+frontend repository, a `VITE_*` variable, or browser storage. See the backend
+README section **GitHub production feature switches** for the exact setup.
+
 Never put tenant secrets, client secrets, Snowflake passwords, access tokens,
 session IDs, or API keys in `.env`, source files, route state, or Git.
 
@@ -229,6 +271,8 @@ development server, build, and then restart it.
 | `npx playwright test tests/report-lineage.spec.ts` | Run only report-lineage desktop/mobile coverage. |
 | `npx playwright test tests/impact-analysis.spec.ts` | Run only table-impact/measure-impact coverage. |
 | `npx playwright test tests/scanner.spec.ts` | Run only Scanner page and Explorer scan-panel coverage. |
+| `npx playwright test tests/app-shell.spec.ts` | Run desktop/tablet/mobile shell, collapsible navigation, and floating Power AI layout coverage. |
+| `npx playwright test tests/power-ai.spec.ts` | Run Power AI status, context, chat transport, evidence, error, and responsive-state coverage. |
 | `npx playwright test tests/home.spec.ts` | Run only Home content, navigation, product-image, and desktop/mobile UX coverage. |
 | `npx playwright test tests/setup-guide.spec.ts` | Run only Setup Guide route, navigation, references, and responsive-containment coverage. |
 
@@ -263,6 +307,10 @@ Home
   -> Power BI setup
        -> device-code session OR service-principal session
        -> Power BI and Fabric readiness
+  -> Global Power AI launcher on every route
+       -> backend status decides locked, disabled, unavailable, or ready
+       -> selected object context sends identifiers, never full graphs
+       -> streamed or non-streamed grounded answer with evidence
   -> Database setup
        -> optional source-system session (currently Snowflake)
   -> Explorer
@@ -624,6 +672,7 @@ PBI-Lineage-Frontend/
 |-- .azure/
 |   `-- scripts/
 |       |-- deploy-frontend.ps1
+|       |-- deploy-frontend-from-acr.ps1
 |       `-- download-frontend-artifact.ps1
 |-- .agents/
 |   `-- skills/react-router/
@@ -649,21 +698,43 @@ PBI-Lineage-Frontend/
 |   `-- README.md
 |-- app/
 |   |-- components/
+|   |   |-- power-ai/
+|   |   |   |-- ai-error-banner.tsx
+|   |   |   |-- ask-power-ai-button.tsx
+|   |   |   |-- chat-input.tsx
+|   |   |   |-- context-indicator.tsx
+|   |   |   |-- conversation-view.tsx
+|   |   |   |-- evidence-view.tsx
+|   |   |   |-- persona-selector.tsx
+|   |   |   |-- power-ai-content.tsx
+|   |   |   |-- power-ai-header.tsx
+|   |   |   |-- power-ai-locked.tsx
+|   |   |   |-- power-ai-trigger.tsx
+|   |   |   |-- power-ai-widget.tsx
+|   |   |   `-- suggested-questions.tsx
 |   |   |-- setup-guide/
 |   |   |   `-- setup-guide.tsx
 |   |   |-- ui/
 |   |   |   |-- badge.tsx
 |   |   |   |-- button.tsx
+|   |   |   |-- card.tsx
 |   |   |   |-- checkbox.tsx
 |   |   |   |-- command.tsx
 |   |   |   |-- dialog.tsx
+|   |   |   |-- dropdown-menu.tsx
 |   |   |   |-- input-group.tsx
 |   |   |   |-- input.tsx
 |   |   |   |-- label.tsx
 |   |   |   |-- select.tsx
 |   |   |   |-- separator.tsx
 |   |   |   |-- sheet.tsx
-|   |   |   `-- textarea.tsx
+|   |   |   |-- skeleton.tsx
+|   |   |   |-- switch.tsx
+|   |   |   |-- table.tsx
+|   |   |   |-- tabs.tsx
+|   |   |   |-- textarea.tsx
+|   |   |   |-- toast.tsx
+|   |   |   `-- tooltip.tsx
 |   |   |-- workspace/
 |   |   |   |-- api-documentation.tsx
 |   |   |   |-- api-execution-panel.tsx
@@ -691,9 +762,13 @@ PBI-Lineage-Frontend/
 |   |   |-- dependency-graph.ts
 |   |   |-- grid-export.ts
 |   |   |-- lineage-api.ts
+|   |   |-- power-ai-api.ts
+|   |   |-- power-ai-suggestions.ts
 |   |   |-- query-provider.tsx
 |   |   |-- scanner-api.ts
 |   |   |-- use-api-executor.ts
+|   |   |-- use-power-ai-chat.ts
+|   |   |-- use-power-ai-status.ts
 |   |   |-- use-workspace-scan.ts
 |   |   `-- utils.ts
 |   |-- routes/
@@ -701,18 +776,23 @@ PBI-Lineage-Frontend/
 |   |   |-- setup-guide.tsx
 |   |   `-- workspace.tsx
 |   |-- stores/
-|   |   `-- app-store.ts
+|   |   |-- app-store.ts
+|   |   |-- layout-store.ts
+|   |   `-- power-ai-store.ts
 |   |-- app.css
 |   |-- root.tsx
 |   `-- routes.ts
 |-- public/
 |   |-- favicon.ico
 |   |-- product-lineage-view.png
+|   |-- tab_logo.png
 |   `-- web.config
 |-- tests/
 |   |-- api-documentation.spec.ts
+|   |-- app-shell.spec.ts
 |   |-- home.spec.ts
 |   |-- impact-analysis.spec.ts
+|   |-- power-ai.spec.ts
 |   |-- report-lineage.spec.ts
 |   |-- scanner.spec.ts
 |   `-- setup-guide.spec.ts
@@ -749,20 +829,22 @@ PBI-Lineage-Frontend/
 | `.gitignore` | Excludes dependencies, generated React Router/build/test artifacts, environment files, and local context documents. |
 | `public/favicon.ico` | Browser/site icon copied unchanged into the production client output. |
 | `public/product-lineage-view.png` | Tested Report Lineage workspace capture used as the Home product preview. |
+| `public/tab_logo.png` | Current browser-tab icon referenced by the React Router root links. |
 | `public/web.config` | IIS rewrite configuration copied into every production artifact; proxies API/OpenAPI requests to FastAPI and falls back application routes to `index.html`. |
 | `.github/workflows/ci.yml` | Main-branch/pull-request quality gate using Node 22, `npm ci`, strict typecheck, and production build. |
-| `.github/workflows/cd.yml` | Production deployment gate: builds the successful main commit, uploads a ZIP through Azure OIDC, invokes the VM release scripts, and smoke-tests the public site and backend health. |
+| `.github/workflows/cd.yml` | Production deployment gate: builds the successful main commit, publishes the static ZIP to Azure Container Registry with ORAS, invokes the VM ACR deployment script, and smoke-tests IIS. |
 | `.github/workflows/azure-oidc-test.yml` | Manual Azure federated-identity and resource-group access diagnostic. |
 | `.github/workflows/storage-upload-test.yml` | Manual production-environment build and Azure Blob upload validation without changing the IIS site. |
 | `.azure/scripts/download-frontend-artifact.ps1` | Uses the Azure VM managed identity to download a named release ZIP from Blob Storage and emits a machine-readable success marker. |
 | `.azure/scripts/deploy-frontend.ps1` | Validates and stages a versioned release, atomically repoints IIS, performs local HTTP validation, rolls back on failure, records the release, and prunes old releases. |
+| `.azure/scripts/deploy-frontend-from-acr.ps1` | Pulls the ORAS frontend artifact from ACR with VM identity and delegates validated IIS promotion to the deployment script. |
 
 ### Application Bootstrap And Routes
 
 | File | Purpose and fulfilled responsibility |
 | --- | --- |
 | `app/routes.ts` | Declares the Home index, `/setup-guide`, and optional workspace section route in React Router Framework Mode. |
-| `app/root.tsx` | Creates the HTML shell, loads global CSS, installs QueryProvider, renders route outlets/scripts, restores scroll, and handles route errors. |
+| `app/root.tsx` | Creates the HTML shell, installs QueryProvider and the single global Power AI widget, renders route outlets/scripts, restores scroll, and handles route errors. |
 | `app/app.css` | Imports Tailwind, shadcn, animation, and Geist font styles; defines light/dark design tokens, radii, and global minimum width. |
 | `app/routes/setup-guide.tsx` | Wraps the static setup guide with route metadata plus the shared header and footer. |
 | `app/routes/home.tsx` | Renders `/`: database-neutral product overview, real workspace preview, evidence path, and the single primary Start action. |
@@ -775,6 +857,24 @@ PBI-Lineage-Frontend/
 | `app/components/app-header.tsx` | Renders product identity, active Home/Setup Guide/Workspace/API links, mobile navigation, and an optional TanStack Query backend-health badge. Home disables the health request and badge. |
 | `app/components/app-footer.tsx` | Renders shared navigation, mandatory developer attribution, and current-year copyright on all pages. |
 | `app/components/setup-guide/setup-guide.tsx` | Renders the static, role-oriented Microsoft/Fabric/Scanner/XMLA/Snowflake/backend setup handbook, ordered application handoff, troubleshooting matrix, and authoritative external references. It performs no provider API calls. |
+
+### Power AI Components
+
+| File | Purpose and fulfilled responsibility |
+| --- | --- |
+| `app/components/power-ai/power-ai-widget.tsx` | Mounts one lazy-loaded floating launcher/panel across Home, Setup Guide, workspace, and API routes without reducing the main canvas width. |
+| `app/components/power-ai/power-ai-trigger.tsx` | Shows the ready or locked global launcher based on backend status. |
+| `app/components/power-ai/power-ai-content.tsx` | Composes status-aware locked/chat states and the active conversation controls. |
+| `app/components/power-ai/power-ai-header.tsx` | Displays the panel title, context summary entry point, and collapse command. |
+| `app/components/power-ai/power-ai-locked.tsx` | Presents distinct disabled, unconfigured, unauthenticated, forbidden, and unavailable guidance. |
+| `app/components/power-ai/chat-input.tsx` | Handles message entry plus send/stop behavior during streamed responses. |
+| `app/components/power-ai/conversation-view.tsx` | Renders user/assistant messages, answer status, claims, and generated follow-up questions. |
+| `app/components/power-ai/evidence-view.tsx` | Renders backend-verified evidence and claim citation markers without deriving facts in the browser. |
+| `app/components/power-ai/context-indicator.tsx` | Shows the selected workspace/report/model/object identifiers and names supplied as chat context. |
+| `app/components/power-ai/persona-selector.tsx` | Selects general, business, or developer explanation style. |
+| `app/components/power-ai/suggested-questions.tsx` | Displays backend or context-derived question shortcuts. |
+| `app/components/power-ai/ask-power-ai-button.tsx` | Opens the global panel from analysis views and seeds object context plus a starting question. |
+| `app/components/power-ai/ai-error-banner.tsx` | Converts normalized AI failures into concise user-facing error states. |
 
 ### Workspace Components
 
@@ -819,9 +919,15 @@ collapsible in the same way.
 | `app/lib/use-workspace-scan.ts` | `useWorkspaceScan` hook: drives the scanner's submit-then-poll-then-fetch workflow via TanStack Query's `refetchInterval`, never runs automatically, and resets when the workspace scope changes. Shared by Explorer's scan panel and the Scanner page. |
 | `app/lib/grid-export.ts` | Shared CSV/Excel/copy-table export helpers (`downloadCsv`, `downloadExcel`, `toTabSeparatedValues`, `withExportContext`) used by `ImpactGrid` and available for reuse by other tables. |
 | `app/lib/use-api-executor.ts` | Executes a catalog endpoint with path/query/header values, cookies, optional ephemeral key, JSON body handling, timing, headers, and normalized failure results. |
+| `app/lib/power-ai-api.ts` | Canonical Power AI wire types plus status, non-streaming chat, SSE streaming, cancellation, and normalized error handling for `/api/v1/ai/*`. |
+| `app/lib/power-ai-suggestions.ts` | Produces safe route/object-aware starter questions without generating factual answers. |
+| `app/lib/use-power-ai-status.ts` | Caches the authenticated backend AI status and refreshes it every 30 seconds. |
+| `app/lib/use-power-ai-chat.ts` | Coordinates message state, streamed/non-streamed transport selection, cancellation, final response replacement, and friendly errors. |
 | `app/lib/query-provider.tsx` | Creates one QueryClient with default retry, stale-time, and focus-refetch behavior for the application lifetime. |
 | `app/lib/utils.ts` | Exposes shared class-name composition used by shadcn and custom components. |
 | `app/stores/app-store.ts` | Owns normalized API origin and ephemeral admin-key memory using Zustand. |
+| `app/stores/layout-store.ts` | Persists only the desktop navigation collapsed preference; drawer state remains local and sensitive state is excluded. |
+| `app/stores/power-ai-store.ts` | Owns conversation/UI state and persists only the selected audience; messages, context, errors, and panel-open state are not persisted. |
 
 ### UI Primitives
 
@@ -832,9 +938,11 @@ in feature components and primitive behavior/styling here.
 | --- | --- |
 | `app/components/ui/badge.tsx` | Compact status/category labels. |
 | `app/components/ui/button.tsx` | Button variants, sizes, and rendered-link/button behavior. |
+| `app/components/ui/card.tsx` | Small framed content surfaces used where information is genuinely grouped. |
 | `app/components/ui/checkbox.tsx` | Accessible binary checkbox control. |
 | `app/components/ui/command.tsx` | Command/search list composition based on cmdk. |
 | `app/components/ui/dialog.tsx` | Accessible modal dialog primitives. |
+| `app/components/ui/dropdown-menu.tsx` | Accessible menu trigger, content, item, and submenu primitives. |
 | `app/components/ui/input-group.tsx` | Inputs with leading/trailing controls or content. |
 | `app/components/ui/input.tsx` | Standard text/password/number input styling. |
 | `app/components/ui/label.tsx` | Accessible form labels. |
@@ -842,6 +950,16 @@ in feature components and primitive behavior/styling here.
 | `app/components/ui/separator.tsx` | Horizontal/vertical semantic separators. |
 | `app/components/ui/sheet.tsx` | Responsive side sheet used by mobile workspace navigation. |
 | `app/components/ui/textarea.tsx` | Multi-line input used by JSON request editors. |
+| `app/components/ui/skeleton.tsx` | Stable loading placeholders. |
+| `app/components/ui/switch.tsx` | Accessible binary feature control. |
+| `app/components/ui/table.tsx` | Semantic table structure for compact non-grid content. |
+| `app/components/ui/tabs.tsx` | Accessible tab list, trigger, and panel primitives. |
+| `app/components/ui/toast.tsx` | Local toast state and renderer with no external toast/theme dependency. |
+| `app/components/ui/tooltip.tsx` | Accessible hover/focus descriptions for compact icon controls. |
+
+`app/components/ui/sonner.tsx` is intentionally not part of the project. It
+was unreachable and referenced the uninstalled `sonner` and `next-themes`
+packages, so retaining it caused clean-clone and GitHub TypeScript failures.
 
 ### Tests And Context
 
@@ -851,6 +969,8 @@ in feature components and primitive behavior/styling here.
 | `tests/impact-analysis.spec.ts` | Mocks a two-workspace, two-model backend fixture and verifies Table Impact's and Measure Impact's workspace-scope multi-select, searchable table/measure picker (including cross-workspace merging and scope narrowing), directed/collapsible diagrams, impact grids, and evidence status. |
 | `tests/scanner.spec.ts` | Mocks the four `/api/v1/scanner/*` endpoints (including a status route that reports "Running" before "Succeeded", proving the poll loop works) against a fixture covering every entity type, and verifies both the dedicated Scanner page's multi-workspace scan-and-browse flow across all five tabs and Explorer's single-workspace scan panel replacing its dashboards/app-linkage/ownership placeholders. |
 | `tests/api-documentation.spec.ts` | Mocks OpenAPI/backend operations and verifies GET/POST execution, JSON validation, response metadata, and output copying behavior. |
+| `tests/app-shell.spec.ts` | Verifies desktop navigation persistence, tablet icon rail behavior, mobile drawers, and the non-resizing floating Power AI overlay. |
+| `tests/power-ai.spec.ts` | Verifies availability states, Power BI auth/permission locks, persona persistence, object context, SSE/non-SSE chat, cancellation, evidence, friendly errors, and responsive conversation continuity. |
 | `tests/home.spec.ts` | Verifies the Home route, single main-content action, database-neutral copy, no Home health request, working product image, shared navigation, and desktop/mobile containment. |
 | `tests/setup-guide.spec.ts` | Verifies `/setup-guide`, required setup sections and official links, navigation to Home/workspace, and desktop/mobile layouts. |
 | `REF_DOC/PROJECT_CONTEXT.md` | Local continuity document containing current frontend contracts and implementation constraints; ignored by Git. |
@@ -927,17 +1047,15 @@ release cannot interrupt another. Its deployment sequence is:
 4. ZIP only the contents of `build/client`.
 5. Authenticate GitHub Actions to Azure through OIDC, without a stored Azure
    client secret.
-6. Upload the ZIP to the configured private Blob Storage container.
-7. invoke Azure VM Run Command to execute
-   `.azure/scripts/download-frontend-artifact.ps1`; the VM authenticates to
-   storage with its managed identity.
-8. Invoke `.azure/scripts/deploy-frontend.ps1` to stage and validate a
-   versioned release, repoint the `PBI-Lineage` IIS site, recycle its
-   application pool, and verify the local site.
-9. Roll IIS back to its prior physical path automatically when deployment or
-   validation fails.
-10. Smoke-test `https://lvpowerbilineage.com/` and
-    `https://lvpowerbilineage.com/api/v1/health/live` from the runner.
+6. Resolve the ACR login server, install ORAS on the runner, and push the ZIP
+   plus `deploy-frontend.ps1` as a versioned OCI artifact.
+7. Invoke Azure VM Run Command with
+   `.azure/scripts/deploy-frontend-from-acr.ps1`.
+8. Let the VM managed identity obtain a short-lived ACR token, pull the exact
+   release with ORAS, and invoke `deploy-frontend.ps1`.
+9. Stage and validate a versioned release, repoint the `PBI-Lineage` IIS site,
+   recycle its application pool, and roll back automatically on failure.
+10. Smoke-test the deployed site through IIS on the VM.
 
 Required GitHub `production` environment secrets:
 
@@ -954,15 +1072,15 @@ Required GitHub repository/environment variables:
 | `DEPLOYMENT_ENABLED` | Must equal `true` before the production job is allowed to run. |
 | `AZURE_RESOURCE_GROUP` | Resource group containing the target VM. |
 | `AZURE_VM_NAME` | Windows VM reached through Azure VM Run Command. |
-| `STORAGE_ACCOUNT_NAME` | Storage account receiving release ZIPs. |
-| `FRONTEND_CONTAINER_NAME` | Blob container used for frontend release artifacts. |
+| `ACR_NAME` | Azure Container Registry that stores the frontend OCI artifact. |
+| `ACR_REPOSITORY` | ACR repository name used for versioned frontend releases. |
+| `PRODUCTION_URL` | Public application URL shown in the GitHub deployment environment. |
 
 Production VM layout:
 
 ```text
 C:\pbi-lineage\
-|-- artifacts\
-|   `-- frontend-<commit-sha>.zip
+|-- deploy\                         Temporary ORAS pull workspace
 `-- frontend\
     |-- current-release.txt
     `-- releases\
@@ -972,15 +1090,15 @@ C:\pbi-lineage\
             `-- assets\
 ```
 
-The GitHub OIDC identity needs permission to upload the Blob artifact and run
-commands on the VM. The VM managed identity needs read access to the Blob
-container. IIS and the `PBI-Lineage` site must already exist; deployment moves
-versioned static files and changes the site physical path but does not install
-IIS or create the site.
+The GitHub OIDC identity needs ACR push access and permission to run commands on
+the VM. The VM managed identity needs ACR pull access. Azure CLI and ORAS must
+be available on the VM. IIS and the `PBI-Lineage` site must already exist;
+deployment moves versioned static files and changes the site physical path but
+does not install IIS or create the site.
 
-Use `.github/workflows/azure-oidc-test.yml` to verify federated Azure access and
-`.github/workflows/storage-upload-test.yml` to validate build plus Blob upload
-without repointing IIS. Both are manual diagnostic workflows.
+Use `.github/workflows/azure-oidc-test.yml` to verify federated Azure access.
+`storage-upload-test.yml` remains a manual legacy Blob diagnostic and is not
+part of the current ACR production release path.
 
 ## IIS Setup
 
