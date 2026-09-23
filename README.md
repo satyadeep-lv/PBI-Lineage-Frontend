@@ -11,6 +11,22 @@ Developed by **Satyadeep Singh**.
 
 ## Latest Changes
 
+- Restructured Explorer from seven flat tabs to **two**: **Assets & access**
+  and **Reports**. The report picker now sits once at the top of the Reports
+  tab, above four report-scoped sections — Page details, Source DB lineage,
+  Semantic objects, Report visuals — instead of being repeated inside each
+  tab. The **Table lineage** and **Column mapping** tabs were removed, along
+  with their `/api/v1/explorer/source-database-lineage`,
+  `/api/v1/explorer/visual-source-lookup`, and
+  `/api/v1/lineage/physical-sources/analyze` calls, the client-side graph
+  depth-limiting helpers, and the `include_cross_model_matching` opt-in that
+  only Table lineage used.
+- Added the **Source DB lineage** section, calling
+  `/api/v1/explorer/report-source-tables` for the selected report. Rows with no
+  resolved physical source (`source_object_type: "unknown"`) are listed as
+  unresolved rather than hidden, and account/database/schema blanks read
+  "Not applicable", "Not resolved", or "Not reported" so an inapplicable value
+  is distinguishable from a missing one.
 - Added one global, lazy-loaded Power AI launcher and floating panel across
   Home, Setup Guide, workspace, and API routes.
 - Added evidence/claim rendering, context-aware questions, general/business/
@@ -316,7 +332,8 @@ Home
   -> Explorer
        -> workspace
        -> report or semantic model
-       -> report detail / semantic objects / mappings / diagrams
+       -> report detail / semantic objects / mappings / source and table
+          lineage diagrams
   -> Report Lineage
        -> report selected across the whole estate
        -> snapshot evidence tabs
@@ -387,19 +404,34 @@ identity. IDs appear below selected names only as supporting technical context.
 
 Major levels:
 
-1. Workspace assets and access.
-2. Report page details.
-3. Report visual field lineage.
-4. Semantic tables, columns, measures, hierarchies, relationships, and DAX.
-5. Database-column to semantic-object mapping.
-6. Column and measure dependency diagrams.
+1. **Assets & access** — the workspace's reports, semantic models, and (after
+   an explicit scan) dashboards, app linkage, and ownership.
+2. **Reports** — one report selected once, then four sections against it:
+   1. Page details.
+   2. Source DB lineage: every physical table/view backing the selected
+      report's semantic model, one row per table, with tables whose source
+      could not be traced (`source_object_type: "unknown"`) listed as
+      unresolved rather than omitted.
+   3. Semantic objects: tables, columns, measures, hierarchies,
+      relationships, and their DAX expressions.
+   4. Report visuals: visual field references matched to the bound semantic
+      model.
 
 Heavy report and semantic-model requests begin after selection and are cached by
-TanStack Query. Tabs reuse prepared data instead of repeating provider calls.
+TanStack Query. Sections reuse prepared data instead of repeating provider
+calls; the two that cost extra upstream work (`semantic-model` metadata and
+`report-source-tables`) are gated on their section actually being open.
 
 A report can use a semantic model from another workspace. Never substitute the
 report workspace ID for the model workspace ID unless estate evidence confirms
 the model is local.
+
+Source DB lineage calls the same `/api/v1/explorer/*` bulk endpoint Table
+Impact and Measure Impact already use elsewhere, but scoped to the single
+selected report rather than batched across a workspace. It defaults to
+`include_gateway_sources: false`; checking "Include gateway sources"
+re-fetches with the flag set to `true` — that costs real gateway-admin
+lookups, so it is never default-on.
 
 The Assets & access tab's dashboards, app linkage, and ownership sections are
 empty until the operator explicitly runs a metadata scan for the selected
@@ -883,7 +915,7 @@ PBI-Lineage-Frontend/
 | `app/components/workspace/workspace-sidebar.tsx` | Defines Setup Guide, Overview, operational setup, exploration, table/measure-impact, report-lineage, and API-documentation navigation for desktop/mobile shells. |
 | `app/components/workspace/power-bi-setup.tsx` | Validates and executes device-code/service-principal setup, presents provider readiness, clears secrets, and invalidates identity-dependent caches. |
 | `app/components/workspace/database-setup.tsx` | Validates Snowflake connection input and presents connect/status/logout information without raw setup JSON. |
-| `app/components/workspace/explorer.tsx` | Implements workspace-scoped report/model exploration, background heavy queries, AG Grid tables, copy/export, semantic mapping, column/measure diagrams rendered through the shared lineage engine, and an opt-in metadata scan panel for the current workspace's dashboards, app linkage, and ownership. |
+| `app/components/workspace/explorer.tsx` | Implements workspace-scoped exploration across two tabs — Assets & access, and Reports (one report picker above Page details, Source DB lineage, Semantic objects, and Report visuals) — with background heavy queries, AG Grid tables, copy/export, an opt-in metadata scan panel for the current workspace's dashboards/app linkage/ownership, and an opt-in gateway-sources checkbox for source database evidence. |
 | `app/components/workspace/report-lineage.tsx` | Discovers reports across workspaces, resolves composite model ownership, prepares report snapshots, and renders report evidence tabs/tables. |
 | `app/components/workspace/report-lineage-diagrams.tsx` | Builds selectable report/database, column, measure, and calculated-column dependency graphs with depth controls and evidence copy, rendered through the shared lineage engine. |
 | `app/components/workspace/table-impact.tsx` | Resolves a semantic table's or column's downstream/upstream DAX impact and cross-report/visual evidence into a directed diagram and an exportable AG Grid table. |
@@ -1252,6 +1284,10 @@ requests to `/index.html` after the API proxy rule.
   creator/last-editor/configuring identities.
 - Orval, Vitest, and React Testing Library are installed but generated clients
   and focused unit/component suites are not yet committed.
+- Explorer has no dedicated Playwright spec (`tests/explorer.spec.ts` does not
+  exist). Its two-tab layout and Source DB lineage section were verified
+  manually against both a mocked and a live backend during development but
+  have no committed browser coverage.
 - Table Impact and Measure Impact compute cross-report/visual evidence from at
   most the first 300 reports bound to a semantic model (a visible notice
   appears if that cap is reached); see "Suggested Backend Endpoints" below for

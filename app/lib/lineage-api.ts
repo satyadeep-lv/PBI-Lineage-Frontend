@@ -36,15 +36,64 @@ export async function requestJson<T>(apiOrigin: string, path: string, init?: Req
     headers: { "Content-Type": "application/json", ...(adminKey ? { "X-Lineage-Admin-Key": adminKey } : {}), ...init?.headers },
   });
   const body = await readJsonResponse(response);
-  if (!response.ok) throw new Error(readRequestError(body, response.status));
+  if (!response.ok) throw toApiError(body, response.status, response.headers.get("x-request-id"));
   return body as T;
 }
 
-function readRequestError(body: unknown, status: number) {
-  if (typeof body === "object" && body !== null && "detail" in body && typeof (body as Record<string, unknown>).detail === "string") {
-    return String((body as Record<string, unknown>).detail);
+/**
+ * A failed backend call, carrying the HTTP status plus the backend's uniform
+ * error envelope (`{ error: { code, message, provider, request_id } }`) so the
+ * UI can tell "your session is gone" from "you lack this permission", and so
+ * `request_id` stays available for support instead of being thrown away.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly provider?: string;
+  readonly requestId?: string;
+
+  constructor(message: string, status: number, details: { code?: string; provider?: string; requestId?: string } = {}) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = details.code;
+    this.provider = details.provider;
+    this.requestId = details.requestId;
   }
-  return `Request failed with status ${status}.`;
+}
+
+/** Backend sessions live in one process's memory, so any backend restart turns every call into a 401. */
+export function isSessionExpired(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401;
+}
+
+/** 403 means the session is valid but the identity lacks the Power BI/Fabric scope or admin right this call needs. */
+export function isPermissionDenied(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 403;
+}
+
+export function toApiError(body: unknown, status: number, headerRequestId?: string | null): ApiError {
+  const fallbackRequestId = headerRequestId ?? undefined;
+  const envelope = typeof body === "object" && body !== null ? (body as Record<string, unknown>).error : undefined;
+
+  if (typeof envelope === "object" && envelope !== null) {
+    const error = envelope as Record<string, unknown>;
+    return new ApiError(
+      typeof error.message === "string" && error.message ? error.message : `Request failed with status ${status}.`,
+      status,
+      {
+        code: typeof error.code === "string" ? error.code : undefined,
+        provider: typeof error.provider === "string" ? error.provider : undefined,
+        requestId: typeof error.request_id === "string" ? error.request_id : fallbackRequestId,
+      },
+    );
+  }
+
+  if (typeof body === "object" && body !== null && typeof (body as Record<string, unknown>).detail === "string") {
+    return new ApiError(String((body as Record<string, unknown>).detail), status, { requestId: fallbackRequestId });
+  }
+
+  return new ApiError(`Request failed with status ${status}.`, status, { requestId: fallbackRequestId });
 }
 
 /** Every report bound to a semantic model, estate-wide, from an already-fetched estate/discover response. */

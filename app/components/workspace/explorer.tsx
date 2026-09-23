@@ -31,10 +31,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { PowerBiAuthRequired } from "~/components/workspace/auth-required";
-import { LineageDiagram } from "~/components/workspace/lineage/lineage-diagram";
-import type { LineageGraph } from "~/components/workspace/lineage/lineage-types";
-import { closureToLineageGraph, computeDependencyClosure, referenceKey, type DaxReference as DependencyDaxReference } from "~/lib/dependency-graph";
-import { readJsonResponse } from "~/lib/api-catalog";
+import { ApiError, isPermissionDenied, isSessionExpired, requestJson } from "~/lib/lineage-api";
 import { DEFAULT_SCAN_FLAGS, workspacePayload, type ScannerWorkspace } from "~/lib/scanner-api";
 import { useWorkspaceScan } from "~/lib/use-workspace-scan";
 import { cn } from "~/lib/utils";
@@ -60,7 +57,9 @@ const heavyQueryOptions = {
   retry: false,
 };
 
-type ExplorerTab = "assets" | "report-detail" | "report-semantic" | "semantic-objects" | "column-mapping";
+type ExplorerTab = "assets" | "reports";
+/** Every view inside the Reports tab works against the one report selected there, so the picker lives above these rather than inside each of them. */
+type ReportSection = "report-detail" | "source-db-lineage" | "semantic-objects" | "report-semantic";
 type ExportValue = string | number | boolean | null | undefined;
 type ExplorerGridRow = { id: string; [key: string]: ExportValue };
 type ExportContext = Record<string, string>;
@@ -76,6 +75,8 @@ type Report = {
   id: string;
   name: string;
   dataset_id?: string | null;
+  /** Power BI often omits this, so it is never required — but when present it is the only reliable proof of where the bound model actually lives. */
+  dataset_workspace_id?: string | null;
   description?: string | null;
   report_type?: string | null;
   format?: string | null;
@@ -166,36 +167,43 @@ type DaxAnalysis = {
   dependency_count: number;
 };
 
-type PhysicalSourceResult = {
-  sources: Array<{
-    source_id: string;
-    kind: string;
-    provider: string;
-    database?: string | null;
-    schema_name?: string | null;
-    object_name?: string | null;
-    server?: string | null;
-  }>;
-  mappings: Array<{ semantic_table: string; partition_name: string; source_ids: string[] }>;
-  warnings: Array<{ message: string }>;
-};
-
 type WorkspaceResponse = { workspaces: Workspace[] };
 type ReportsResponse = { reports: Report[] };
 type SemanticModelsResponse = { semantic_models: SemanticModel[] };
 type ReportPagesResponse = { pages: ReportPage[] };
 
+type ExplorerEvidenceWarning = { code: string; message: string };
+
+type ReportSourceTableRow = {
+  workspace_name: string;
+  report_name: string;
+  report_id: string;
+  semantic_model_id: string;
+  source_account?: string | null;
+  source_database?: string | null;
+  source_schema?: string | null;
+  table_name?: string | null;
+  source_object_type: string;
+};
+type ReportSourceTablesResponse = { rows: ReportSourceTableRow[]; count: number; warnings: ExplorerEvidenceWarning[] };
+
 const tabs: Array<{ id: ExplorerTab; label: string; shortLabel: string }> = [
   { id: "assets", label: "1. Reports, dashboards, apps, and access", shortLabel: "Assets & access" },
-  { id: "report-detail", label: "2. Report page details", shortLabel: "Page details" },
-  { id: "report-semantic", label: "3. Report visual field lineage", shortLabel: "Report visuals" },
-  { id: "semantic-objects", label: "4. Semantic model objects", shortLabel: "Semantic objects" },
-  { id: "column-mapping", label: "5. Database column to semantic mapping", shortLabel: "Column mapping" },
+  { id: "reports", label: "2. Report-scoped evidence", shortLabel: "Reports" },
+];
+
+const reportSections: Array<{ id: ReportSection; label: string; shortLabel: string }> = [
+  { id: "report-detail", label: "Report page details", shortLabel: "Page details" },
+  { id: "source-db-lineage", label: "Source database lineage", shortLabel: "Source DB lineage" },
+  { id: "semantic-objects", label: "Semantic model objects", shortLabel: "Semantic objects" },
+  { id: "report-semantic", label: "Report visual field lineage", shortLabel: "Report visuals" },
 ];
 
 export function Explorer() {
   const apiOrigin = useAppStore((state) => state.apiOrigin);
   const [activeTab, setActiveTab] = useState<ExplorerTab>("assets");
+  const [activeReportSection, setActiveReportSection] = useState<ReportSection>("report-detail");
+  const [gatewaySourcesEnabled, setGatewaySourcesEnabled] = useState(false);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [selectedReportId, setSelectedReportId] = useState("");
   const [selectedSemanticModelId, setSelectedSemanticModelId] = useState("");
@@ -288,13 +296,19 @@ export function Explorer() {
     enabled: Boolean(selectedWorkspaceId && selectedReportId),
     ...heavyQueryOptions,
   });
+  // Drive semantic lineage from the report's own binding rather than from a model
+  // that happens to be listed in this workspace: a report can be bound to a model
+  // in another workspace, and `dataset_workspace_id` (when Power BI returns it) is
+  // the only reliable proof of where that model lives.
+  const boundModelId = selectedReport?.dataset_id ?? null;
+  const boundModelWorkspaceId = selectedReport?.dataset_workspace_id ?? selectedWorkspaceId;
   const reportSemanticLineageQuery = useQuery({
-    queryKey: ["explorer", "report-semantic-lineage", apiOrigin, selectedWorkspaceId, selectedReportId, reportSemanticModel?.id],
+    queryKey: ["explorer", "report-semantic-lineage", apiOrigin, selectedWorkspaceId, selectedReportId, boundModelId, boundModelWorkspaceId],
     queryFn: () => {
-      const query = new URLSearchParams({ semantic_model_id: reportSemanticModel!.id, semantic_model_workspace_id: selectedWorkspaceId });
+      const query = new URLSearchParams({ semantic_model_id: boundModelId!, semantic_model_workspace_id: boundModelWorkspaceId });
       return requestJson<ReportSemanticLineage>(apiOrigin, `/api/v1/workspaces/${selectedWorkspaceId}/reports/${selectedReportId}/semantic-lineage?${query.toString()}`, { method: "POST" });
     },
-    enabled: Boolean(selectedWorkspaceId && selectedReportId && reportSemanticModel?.id),
+    enabled: Boolean(selectedWorkspaceId && selectedReportId && boundModelId),
     ...heavyQueryOptions,
   });
   const parsedSemanticModelQuery = useQuery({
@@ -312,13 +326,13 @@ export function Explorer() {
   const semanticMetadataQuery = useQuery({
     queryKey: ["explorer", "semantic-metadata", apiOrigin, selectedWorkspaceId, selectedSemanticModelId],
     queryFn: () => requestJson<{ reconciliation: { matched_count: number; definition_only_count: number; xmla_only_count: number } }>(apiOrigin, `/api/v1/workspaces/${selectedWorkspaceId}/semantic-models/${selectedSemanticModelId}/metadata?format=TMDL`),
-    enabled: Boolean(selectedWorkspaceId && selectedSemanticModelId && activeTab === "semantic-objects"),
+    enabled: Boolean(selectedWorkspaceId && selectedSemanticModelId && activeTab === "reports" && activeReportSection === "semantic-objects"),
     ...heavyQueryOptions,
   });
-  const physicalSourceQuery = useQuery({
-    queryKey: ["explorer", "physical-sources", apiOrigin, selectedWorkspaceId, selectedSemanticModelId],
-    queryFn: () => requestJson<PhysicalSourceResult>(apiOrigin, "/api/v1/lineage/physical-sources/analyze", { method: "POST", body: JSON.stringify({ semantic_model: parsedSemanticModelQuery.data, gateway_datasources: [] }) }),
-    enabled: Boolean(parsedSemanticModelQuery.data && activeTab === "column-mapping"),
+  const reportSourceTablesQuery = useQuery({
+    queryKey: ["explorer", "report-source-tables", apiOrigin, selectedWorkspaceId, selectedReportId, gatewaySourcesEnabled],
+    queryFn: () => requestJson<ReportSourceTablesResponse>(apiOrigin, "/api/v1/explorer/report-source-tables", { method: "POST", body: JSON.stringify(explorerReportsBody(selectedWorkspace!, selectedReport!, { includeGatewaySources: gatewaySourcesEnabled })) }),
+    enabled: Boolean(selectedWorkspaceId && selectedReportId && activeTab === "reports" && activeReportSection === "source-db-lineage"),
     ...heavyQueryOptions,
   });
 
@@ -341,7 +355,7 @@ export function Explorer() {
             <div>
               <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-teal-700">Power BI</span><Badge className="rounded-[8px] border border-teal-200 bg-teal-50 text-teal-800">Name-based explorer</Badge></div>
               <h1 className="text-lg font-semibold">Explorer</h1>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">Choose a workspace and report by name, then follow the tabs to understand report pages, model objects, and source-column evidence.</p>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">Choose a workspace, review its assets, then pick a report to see its pages, source database tables, semantic objects, and visual field lineage.</p>
             </div>
           </div>
           <NameSelector id="explorer-workspace" label="Workspace" items={workspaces} selectedId={selectedWorkspaceId} onChange={setSelectedWorkspaceId} />
@@ -355,24 +369,36 @@ export function Explorer() {
 
       <ExplorerGuidance />
       <div className="overflow-x-auto border-b border-zinc-200 bg-[#fafbfc]">
-        <div className="flex min-w-max px-4 sm:px-6" role="tablist" aria-label="Explorer detail levels">
+        <div className="flex min-w-max px-4 sm:px-6" role="tablist" aria-label="Explorer sections">
           {tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} className={cn("border-b-2 px-4 py-3 text-left text-sm transition", activeTab === tab.id ? "border-teal-700 font-semibold text-teal-800" : "border-transparent text-zinc-500 hover:text-zinc-950")} title={tab.label}>{tab.shortLabel}</button>)}
         </div>
       </div>
 
       <div className="p-5 sm:p-6">
-        {activeTab === "assets" && <AssetsAccessTab workspace={selectedWorkspace} reports={reports} semanticModels={semanticModels} isLoading={reportsQuery.isLoading || semanticModelsQuery.isLoading} error={reportsQuery.error ?? semanticModelsQuery.error} scan={scan} onReportSelect={(reportId) => { setSelectedReportId(reportId); setActiveTab("report-detail"); }} onSemanticModelSelect={(modelId) => { setSelectedSemanticModelId(modelId); setActiveTab("semantic-objects"); }} />}
-        {activeTab === "report-detail" && <ReportDetailTab workspace={selectedWorkspace} reports={reports} selectedReport={selectedReport} reportSemanticModel={reportSemanticModel} onReportChange={setSelectedReportId} detailQuery={reportDetailQuery} pagesQuery={reportPagesQuery} />}
-        {activeTab === "report-semantic" && <ReportSemanticTab workspace={selectedWorkspace} reports={reports} selectedReport={selectedReport} reportSemanticModel={reportSemanticModel} onReportChange={setSelectedReportId} normalizedQuery={normalizedReportQuery} lineageQuery={reportSemanticLineageQuery} parsed={parsedSemanticModelQuery.data} daxQuery={daxQuery} />}
-        {activeTab === "semantic-objects" && <SemanticObjectsTab workspace={selectedWorkspace} selectedReport={selectedReport} semanticModels={semanticModels} selectedSemanticModel={selectedSemanticModel} onSemanticModelChange={setSelectedSemanticModelId} parsedQuery={parsedSemanticModelQuery} daxQuery={daxQuery} metadataQuery={semanticMetadataQuery} />}
-        {activeTab === "column-mapping" && <ColumnMappingTab workspace={selectedWorkspace} selectedReport={selectedReport} semanticModels={semanticModels} selectedSemanticModel={selectedSemanticModel} onSemanticModelChange={setSelectedSemanticModelId} parsedQuery={parsedSemanticModelQuery} daxQuery={daxQuery} physicalSourceQuery={physicalSourceQuery} />}
+        {activeTab === "assets" && <AssetsAccessTab workspace={selectedWorkspace} reports={reports} semanticModels={semanticModels} isLoading={reportsQuery.isLoading || semanticModelsQuery.isLoading} error={reportsQuery.error ?? semanticModelsQuery.error} scan={scan} onReportSelect={(reportId) => { setSelectedReportId(reportId); setActiveReportSection("report-detail"); setActiveTab("reports"); }} onSemanticModelSelect={(modelId) => { setSelectedSemanticModelId(modelId); setActiveReportSection("semantic-objects"); setActiveTab("reports"); }} />}
+        {activeTab === "reports" && <div className="space-y-6">
+          <ReportSelector reports={reports} selectedReport={selectedReport} onChange={setSelectedReportId} />
+          {!reports.length
+            ? <ExplorerEmpty title="No reports in this workspace" text="Choose another workspace, or check that the authenticated account can see this workspace's reports." />
+            : <>
+                <div className="overflow-x-auto border-b border-zinc-200">
+                  <div className="flex min-w-max gap-1" role="tablist" aria-label="Report evidence sections">
+                    {reportSections.map((section) => <button key={section.id} type="button" role="tab" aria-selected={activeReportSection === section.id} onClick={() => setActiveReportSection(section.id)} className={cn("border-b-2 px-3 py-2 text-sm transition", activeReportSection === section.id ? "border-teal-700 font-semibold text-teal-800" : "border-transparent text-zinc-500 hover:text-zinc-950")} title={section.label}>{section.shortLabel}</button>)}
+                  </div>
+                </div>
+                {activeReportSection === "report-detail" && <ReportDetailTab workspace={selectedWorkspace} selectedReport={selectedReport} reportSemanticModel={reportSemanticModel} detailQuery={reportDetailQuery} pagesQuery={reportPagesQuery} />}
+                {activeReportSection === "source-db-lineage" && <SourceDbLineageTab workspace={selectedWorkspace} selectedReport={selectedReport} query={reportSourceTablesQuery} gatewaySourcesEnabled={gatewaySourcesEnabled} onGatewaySourcesChange={setGatewaySourcesEnabled} />}
+                {activeReportSection === "semantic-objects" && <SemanticObjectsTab workspace={selectedWorkspace} selectedReport={selectedReport} semanticModels={semanticModels} selectedSemanticModel={selectedSemanticModel} onSemanticModelChange={setSelectedSemanticModelId} parsedQuery={parsedSemanticModelQuery} daxQuery={daxQuery} metadataQuery={semanticMetadataQuery} />}
+                {activeReportSection === "report-semantic" && <ReportSemanticTab workspace={selectedWorkspace} selectedReport={selectedReport} reportSemanticModel={reportSemanticModel} normalizedQuery={normalizedReportQuery} lineageQuery={reportSemanticLineageQuery} parsed={parsedSemanticModelQuery.data} daxQuery={daxQuery} />}
+              </>}
+        </div>}
       </div>
     </section>
   );
 }
 
 function ExplorerGuidance() {
-  return <div className="grid border-b border-zinc-200 bg-zinc-50 md:grid-cols-3"><GuidanceStep number="1" title="Choose the business name" text="Start with the workspace and report people recognize." /><GuidanceStep number="2" title="Follow the report" text="Check its pages, visuals, and linked model." /><GuidanceStep number="3" title="Trace the evidence" text="Use the model and mapping tabs to find source fields and DAX usage." /></div>;
+  return <div className="grid border-b border-zinc-200 bg-zinc-50 md:grid-cols-3"><GuidanceStep number="1" title="Choose the business name" text="Start with the workspace and report people recognize." /><GuidanceStep number="2" title="Pick the report" text="Everything in the Reports tab is scoped to the report selected there." /><GuidanceStep number="3" title="Trace the evidence" text="Work through page details, source DB lineage, semantic objects, and report visuals." /></div>;
 }
 
 function GuidanceStep({ number, title, text }: { number: string; title: string; text: string }) {
@@ -394,7 +420,7 @@ function AssetsAccessTab({ workspace, reports, semanticModels, isLoading, error,
   onSemanticModelSelect: (id: string) => void;
 }) {
   const modelNames = new Map(semanticModels.map((model) => [model.id, model.name]));
-  const reportRows: ExplorerGridRow[] = reports.map((report) => ({ id: report.id, reportId: report.id, name: report.name, type: report.report_type ?? "Report", semanticModel: report.dataset_id ? modelNames.get(report.dataset_id) ?? "External or unresolved model" : "No model returned", format: report.format ?? "--", access: report.is_owned_by_me ? "You" : "Shared" }));
+  const reportRows: ExplorerGridRow[] = reports.map((report) => ({ id: report.id, reportId: report.id, name: report.name, type: report.report_type ?? "Report", semanticModel: report.dataset_id ? modelNames.get(report.dataset_id) ?? (report.dataset_workspace_id ? "Model in another workspace" : "External or unresolved model") : "No model returned", format: report.format ?? "--", access: report.is_owned_by_me ? "You" : "Shared" }));
   const modelRows: ExplorerGridRow[] = semanticModels.map((model) => ({ id: model.id, semanticModelId: model.id, name: model.name, storage: model.target_storage_mode ?? "--", refresh: model.is_refreshable ? "Refreshable" : "Not reported", gateway: model.is_on_prem_gateway_required ? "Required" : "Not required" }));
   if (isLoading) return <ExplorerLoading label="Loading reports and semantic models" />;
   if (error) return <ExplorerError text="Report or semantic-model inventory is unavailable for this workspace." />;
@@ -461,12 +487,10 @@ function ScannerEvidenceResults({ workspace, exportContext }: { workspace: Scann
   </div>;
 }
 
-function ReportDetailTab({ workspace, reports, selectedReport, reportSemanticModel, onReportChange, detailQuery, pagesQuery }: {
+function ReportDetailTab({ workspace, selectedReport, reportSemanticModel, detailQuery, pagesQuery }: {
   workspace: Workspace | null;
-  reports: Report[];
   selectedReport: Report | null;
   reportSemanticModel: SemanticModel | null;
-  onReportChange: (id: string) => void;
   detailQuery: UseQueryResult<Report, Error>;
   pagesQuery: UseQueryResult<ReportPagesResponse, Error>;
 }) {
@@ -474,7 +498,6 @@ function ReportDetailTab({ workspace, reports, selectedReport, reportSemanticMod
   const pageRows: ExplorerGridRow[] = pages.map((page) => ({ id: page.name, pageName: page.name, displayName: page.display_name, order: page.order + 1 }));
   const context = makeExportContext(workspace, selectedReport, reportSemanticModel);
   return <div className="space-y-6">
-    <ReportSelector reports={reports} selectedReport={selectedReport} onChange={onReportChange} />
     <SectionHeading icon={<FileBarChart2 className="size-5" />} title="Report page details" text="Each report is read individually so page information is ready before semantic and source evidence is reviewed." />
     {detailQuery.isLoading || pagesQuery.isLoading ? <ExplorerLoading label="Loading selected report and pages" /> : null}
     {detailQuery.isError || pagesQuery.isError ? <ExplorerError text="Selected report details are unavailable for this workspace." /> : null}
@@ -483,12 +506,10 @@ function ReportDetailTab({ workspace, reports, selectedReport, reportSemanticMod
   </div>;
 }
 
-function ReportSemanticTab({ workspace, reports, selectedReport, reportSemanticModel, onReportChange, normalizedQuery, lineageQuery, parsed, daxQuery }: {
+function ReportSemanticTab({ workspace, selectedReport, reportSemanticModel, normalizedQuery, lineageQuery, parsed, daxQuery }: {
   workspace: Workspace | null;
-  reports: Report[];
   selectedReport: Report | null;
   reportSemanticModel: SemanticModel | null;
-  onReportChange: (id: string) => void;
   normalizedQuery: UseQueryResult<NormalizedReport, Error>;
   lineageQuery: UseQueryResult<ReportSemanticLineage, Error>;
   parsed: ParsedSemanticModel | undefined;
@@ -500,9 +521,9 @@ function ReportSemanticTab({ workspace, reports, selectedReport, reportSemanticM
     return { id: `${match.page_display_name}-${match.visual_title ?? index}-${index}`, page: match.page_display_name, visual: match.visual_title ?? match.visual_type ?? "Untitled visual", semanticTable: object?.table_name ?? "Unresolved", semanticObject: object?.object_name ?? "Unresolved", type: object?.object_type ?? "--", daxExpression: object ? expressionIndex.get(objectKey(object.table_name, object.object_name)) ?? "No DAX expression declared" : "No semantic object resolved", status: match.status, confidence: `${Math.round(match.match_confidence * 100)}%` };
   });
   return <div className="space-y-6">
-    <ReportSelector reports={reports} selectedReport={selectedReport} onChange={onReportChange} />
     <SectionHeading icon={<BookOpenCheck className="size-5" />} title="Report visual lineage" text="This matches fields used in a report's visuals to the linked semantic model, including the DAX expression when that object is calculated." />
-    {!reportSemanticModel && <ExplorerError text="This report does not resolve to a semantic model in the selected workspace. Composite reports can use a model in another workspace, which needs to be selected separately." />}
+    {!reportSemanticModel && selectedReport?.dataset_id && <div className="border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950">This report's semantic model is not listed in the selected workspace{selectedReport.dataset_workspace_id ? `; Power BI reports it lives in workspace ${selectedReport.dataset_workspace_id}` : ""}. Field lineage is still requested against the report's bound model.</div>}
+    {!selectedReport?.dataset_id && <ExplorerError text="This report did not return a bound semantic model, so no field lineage can be requested for it." />}
     {reportSemanticModel && <div className="border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">Linked semantic model: <strong>{reportSemanticModel.name}</strong></div>}
     {normalizedQuery.isLoading || lineageQuery.isLoading ? <ExplorerLoading label="Reading report definition and semantic field matches" /> : null}
     {normalizedQuery.isError || lineageQuery.isError ? <ExplorerError text="Report semantic lineage needs both Power BI and Fabric permissions for the selected report and model." /> : null}
@@ -535,125 +556,154 @@ function SemanticObjectsTab({ workspace, selectedReport, semanticModels, selecte
   </div>;
 }
 
-function ColumnMappingTab({ workspace, selectedReport, semanticModels, selectedSemanticModel, onSemanticModelChange, parsedQuery, daxQuery, physicalSourceQuery }: {
-  workspace: Workspace | null;
-  selectedReport: Report | null;
-  semanticModels: SemanticModel[];
-  selectedSemanticModel: SemanticModel | null;
-  onSemanticModelChange: (id: string) => void;
-  parsedQuery: UseQueryResult<ParsedSemanticModel, Error>;
-  daxQuery: UseQueryResult<DaxAnalysis, Error>;
-  physicalSourceQuery: UseQueryResult<PhysicalSourceResult, Error>;
+/**
+ * One selection is always enough here because Explorer works a single report at
+ * a time; `semantic_model_id` is deliberately omitted so the backend infers the
+ * binding itself (which is also what makes a model in another workspace work).
+ * Both `include_*` flags cost real upstream API calls, so they default to off.
+ */
+function explorerReportsBody(workspace: Workspace, report: Report, options?: { includeCrossModelMatching?: boolean; includeGatewaySources?: boolean }) {
+  return {
+    reports: [{ workspace_id: workspace.id, report_id: report.id }],
+    include_gateway_sources: options?.includeGatewaySources ?? false,
+    include_cross_model_matching: options?.includeCrossModelMatching ?? false,
+    report_definition_format: "PBIR",
+    semantic_model_definition_format: "TMDL",
+  };
+}
+
+/**
+ * Explicit opt-in for evidence that costs real upstream API calls (a tenant
+ * lineage scan, or gateway admin lookups). Always rendered off by default and
+ * never enabled implicitly by navigation.
+ */
+function EvidenceOptionToggle({ title, text, label, checked, onChange }: {
+  title: string;
+  text: string;
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
 }) {
-  const [selectedTableName, setSelectedTableName] = useState("");
-  const [selectedColumnName, setSelectedColumnName] = useState("");
-  const [selectedMeasureName, setSelectedMeasureName] = useState("");
-  const tables = parsedQuery.data?.tables ?? [];
-
-  useEffect(() => {
-    if (tables.length && !tables.some((table) => table.name === selectedTableName)) {
-      setSelectedTableName(tables[0].name);
-    }
-  }, [selectedTableName, tables]);
-
-  const selectedTable = tables.find((table) => table.name === selectedTableName) ?? null;
-
-  useEffect(() => {
-    if (selectedTable?.columns.length && !selectedTable.columns.some((column) => column.name === selectedColumnName)) {
-      setSelectedColumnName(selectedTable.columns[0].name);
-    }
-  }, [selectedColumnName, selectedTable]);
-
-  const selectedColumn = selectedTable?.columns.find((column) => column.name === selectedColumnName) ?? null;
-
-  useEffect(() => {
-    if (selectedTable?.measures.length && !selectedTable.measures.some((measure) => measure.name === selectedMeasureName)) {
-      setSelectedMeasureName(selectedTable.measures[0].name);
-    }
-  }, [selectedMeasureName, selectedTable]);
-
-  const selectedMeasure = selectedTable?.measures.find((measure) => measure.name === selectedMeasureName) ?? null;
-  const mappingRows = databaseColumnRows(parsedQuery.data, daxQuery.data).filter((row) => !selectedTableName || row.semanticTable === selectedTableName);
-  const sourceRows: ExplorerGridRow[] = (physicalSourceQuery.data?.sources ?? []).map((source) => ({ id: source.source_id, sourceId: source.source_id, provider: source.provider, location: [source.server, source.database, source.schema_name, source.object_name].filter(Boolean).join(".") || "Not reported", kind: source.kind }));
-  const context = makeExportContext(workspace, selectedReport, selectedSemanticModel);
-  return <div className="space-y-6">
-    <SemanticModelSelector semanticModels={semanticModels} selectedSemanticModel={selectedSemanticModel} onChange={onSemanticModelChange} />
-    <SectionHeading icon={<Database className="size-5" />} title="Database column to semantic object mapping" text="For each source column, this shows the semantic column and the DAX measures or calculations that directly use it." />
-    {parsedQuery.isLoading ? <ExplorerLoading label="Loading semantic source evidence" /> : null}
-    {parsedQuery.isError ? <ExplorerError text="Semantic definition retrieval is unavailable for the selected model." /> : null}
-    {daxQuery.isLoading && parsedQuery.data ? <ExplorerLoading label="Finding DAX expressions that use each column" compact /> : null}
-    {daxQuery.isError && parsedQuery.data ? <DaxUnavailable /> : null}
-    {parsedQuery.data && <><div className="grid gap-4 border-y border-zinc-200 py-4 md:grid-cols-2"><LineageSelect id="lineage-table" label="Semantic table" value={selectedTableName} options={tables.map((table) => table.name)} onChange={setSelectedTableName} /><LineageSelect id="lineage-column" label="Column" value={selectedColumnName} options={selectedTable?.columns.map((column) => column.name) ?? []} onChange={setSelectedColumnName} /></div>{selectedTable && selectedColumn && <ColumnLineageDiagram parsed={parsedQuery.data} table={selectedTable} column={selectedColumn} dax={daxQuery.data} />}{selectedTable && <div className="space-y-4 border-t border-zinc-200 pt-6"><SectionHeading icon={<TableProperties className="size-5" />} title="Measure-level lineage" text="Select the target measure to see the columns and measures used to calculate it, followed by measures that depend on it." /><div className="max-w-sm"><LineageSelect id="lineage-measure" label="Target measure" value={selectedMeasureName} options={selectedTable.measures.map((measure) => measure.name)} onChange={setSelectedMeasureName} /></div>{selectedMeasure ? <MeasureLineageDiagram parsed={parsedQuery.data} table={selectedTable} measure={selectedMeasure} dax={daxQuery.data} /> : <div className="border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-600">No measures were returned for the selected semantic table.</div>}</div>}<ExplorerGrid rowData={mappingRows} columnDefs={[{ field: "sourceColumn", headerName: "Database column", minWidth: 230, flex: 1 }, { field: "semanticTable", headerName: "Semantic table", minWidth: 190 }, { field: "semanticColumn", headerName: "Semantic column", minWidth: 190 }, { field: "dataType", headerName: "Data type", minWidth: 130 }, { field: "daxUsedBy", headerName: "Used by DAX", minWidth: 220 }, daxColumn("daxExpressions", "DAX expression using column"), { field: "evidence", headerName: "Definition evidence", minWidth: 240, flex: 1 }]} emptyMessage="No source-column mappings were found in the semantic definition." exportFileName={`${filePart(selectedSemanticModel?.name)}-${filePart(selectedTableName)}-column-mapping`} exportContext={context} /></>}
-    {physicalSourceQuery.isLoading ? <ExplorerLoading label="Analyzing physical source evidence" compact /> : null}
-    {physicalSourceQuery.data && <div><SectionHeading icon={<Database className="size-5" />} title="Detected physical sources" text="Physical provider, database, and object details discovered from semantic partitions." /><ExplorerGrid rowData={sourceRows} columnDefs={[{ field: "provider", headerName: "Provider", minWidth: 180 }, { field: "location", headerName: "Database object", minWidth: 300, flex: 1 }, { field: "kind", headerName: "Kind", minWidth: 140 }]} emptyMessage="No physical sources were detected." exportFileName={`${filePart(selectedSemanticModel?.name)}-physical-sources`} exportContext={context} /></div>}
-    {physicalSourceQuery.isError && parsedQuery.data && <div className="border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">Physical-source analysis is not enabled for this session. The source-column and DAX evidence above is still available.</div>}
+  return <div className="flex flex-wrap items-center justify-between gap-3 border-y border-zinc-200 bg-zinc-50 px-4 py-3">
+    <div>
+      <p className="text-sm font-semibold">{title}</p>
+      <p className="mt-0.5 max-w-2xl text-xs leading-5 text-zinc-500">{text}</p>
+    </div>
+    <label className="flex shrink-0 items-center gap-2 text-sm font-medium text-zinc-700">
+      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="size-4 accent-teal-700" />
+      {label}
+    </label>
   </div>;
 }
 
-function LineageSelect({ id, label, value, options, onChange }: { id: string; label: string; value: string; options: string[]; onChange: (value: string) => void }) {
-  return <div className="space-y-1.5"><label className="text-xs font-semibold text-zinc-600" htmlFor={id}>{label}</label><select id={id} value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-950 outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-100"><option value="" disabled>Select a {label.toLowerCase()}</option>{options.map((option) => <option key={option} value={option}>{option}</option>)}</select></div>;
+function ExplorerWarnings({ warnings }: { warnings: ExplorerEvidenceWarning[] }) {
+  if (!warnings.length) return null;
+  return <div className="space-y-1 border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">{warnings.map((warning, index) => <p key={`${warning.code}-${index}`}>{warning.message}</p>)}</div>;
 }
 
-function ColumnLineageDiagram({ parsed, table, column, dax }: { parsed: ParsedSemanticModel; table: ParsedTable; column: ParsedColumn; dax: DaxAnalysis | undefined }) {
-  const graph = useMemo(() => buildColumnLineage(parsed, table, column, dax), [column, dax, parsed, table]);
-  const focusNodeId = referenceKey({ object_type: column.expression ? "calculated_column" : "column", table_name: table.name, object_name: column.name, qualified_name: "" });
-  return <LineageDiagram direction="TB" graph={graph} focusNodeId={focusNodeId} title="Column-level lineage" description={`${table.name}[${column.name}] from source evidence through DAX calculations.`} emptyText="No column lineage could be prepared for the selected field." />;
-}
-
-function MeasureLineageDiagram({ parsed, table, measure, dax }: { parsed: ParsedSemanticModel; table: ParsedTable; measure: ParsedTable["measures"][number]; dax: DaxAnalysis | undefined }) {
-  const graph = useMemo(() => buildMeasureLineage(parsed, table, measure, dax), [dax, measure, parsed, table]);
-  const focusNodeId = referenceKey({ object_type: "measure", table_name: table.name, object_name: measure.name, qualified_name: "" });
-  return <LineageDiagram direction="LR" graph={graph} focusNodeId={focusNodeId} title="Measure-level lineage" description={`${table.name}[${measure.name}] is the target measure. Its calculation inputs and dependent measures are shown in full.`} emptyText="No measure lineage could be prepared for the selected measure." />;
-}
-
-function buildColumnLineage(parsed: ParsedSemanticModel, table: ParsedTable, column: ParsedColumn, dax: DaxAnalysis | undefined): LineageGraph {
-  const dependencies = dax?.dependencies ?? [];
-  const expressionIndex = buildExpressionIndex(parsed);
-  const seed: DependencyDaxReference = { object_type: column.expression ? "calculated_column" : "column", table_name: table.name, object_name: column.name, qualified_name: `${table.name}[${column.name}]` };
-  const rootId = referenceKey(seed);
-  const closure = computeDependencyClosure(dependencies, [seed]);
-  const graph = closureToLineageGraph({ seeds: [seed], upstream: [], downstream: closure.downstream }, dependencies);
-  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
-
-  const rootNode = nodeById.get(rootId);
-  if (rootNode) rootNode.detail = column.expression ?? "Semantic column";
-  closure.downstream.forEach((hop) => {
-    const node = nodeById.get(referenceKey(hop.reference));
-    if (node) node.detail = expressionIndex.get(objectKey(hop.reference.table_name, hop.reference.object_name)) ?? `DAX ${hop.reference.object_type}`;
+function SourceDbLineageTab({ workspace, selectedReport, query, gatewaySourcesEnabled, onGatewaySourcesChange }: {
+  workspace: Workspace | null;
+  selectedReport: Report | null;
+  query: UseQueryResult<ReportSourceTablesResponse, Error>;
+  gatewaySourcesEnabled: boolean;
+  onGatewaySourcesChange: (value: boolean) => void;
+}) {
+  const rows: ExplorerGridRow[] = (query.data?.rows ?? []).map((row, index) => {
+    const absent = absentSourceValue(row.source_object_type);
+    const upstreamWorkspace = powerBiWorkspaceName(row.source_account);
+    return {
+      id: `${row.semantic_model_id}-${row.table_name ?? "unknown"}-${index}`,
+      workspaceName: row.workspace_name,
+      reportName: row.report_name,
+      reportId: row.report_id,
+      datasetId: row.semantic_model_id,
+      origin: sourceOrigin(row.source_object_type, null, row.source_account),
+      sourceAccount: upstreamWorkspace ? `Power BI workspace: ${upstreamWorkspace}` : row.source_account ?? absent,
+      sourceDatabase: row.source_database ?? absent,
+      sourceSchema: row.source_schema ?? absent,
+      tableName: row.table_name ?? absent,
+      sourceObjectType: row.source_object_type,
+    };
   });
-
-  const sourceId = `source-${rootId}`;
-  const sourceLabel = [
-    column.source_column ? `Column: ${column.source_column}` : null,
-    column.source_path ? `Path: ${column.source_path}` : null,
-  ].filter(Boolean).join(" | ") || "Source column not declared";
-  graph.nodes.push({ id: sourceId, kind: "database-source", label: "Source evidence", detail: sourceLabel });
-  graph.edges.push({ id: `${sourceId}-${rootId}`, source: sourceId, target: rootId, label: "maps to" });
-
-  return graph;
+  return <div className="space-y-6">
+    <SectionHeading icon={<Database className="size-5" />} title="Source database lineage" text="Every physical table, view, file, URL, or upstream model backing this report's semantic model, read directly from its partition query evidence. Tables whose origin could not be traced are listed as unresolved rather than hidden." />
+    <EvidenceOptionToggle
+      title="Gateway datasources"
+      text="Adds on-premises gateway lookups so gateway-backed partitions resolve to their datasource. Needs gateway-admin rights; without them the call still succeeds and returns a warning instead of data."
+      label="Include gateway sources"
+      checked={gatewaySourcesEnabled}
+      onChange={onGatewaySourcesChange}
+    />
+    {query.isLoading ? <ExplorerLoading label="Reading source database evidence" /> : null}
+    {query.isError ? <EvidenceError error={query.error} fallback="Source database lineage requires Fabric access for the selected report's semantic model." /> : null}
+    {query.data && <>
+      <ExplorerWarnings warnings={query.data.warnings} />
+      <ExplorerGrid
+        rowData={rows}
+        columnDefs={[
+          { field: "workspaceName", headerName: "Workspace name", minWidth: 190, flex: 1 },
+          { field: "reportName", headerName: "Report name", minWidth: 190, flex: 1 },
+          { field: "reportId", headerName: "Report ID", minWidth: 220 },
+          { field: "datasetId", headerName: "Dataset ID", minWidth: 220 },
+          { field: "origin", headerName: "Origin", minWidth: 170 },
+          { field: "sourceAccount", headerName: "Source account", minWidth: 190 },
+          { field: "sourceDatabase", headerName: "Source DB", minWidth: 150 },
+          { field: "sourceSchema", headerName: "Schema", minWidth: 130 },
+          { field: "tableName", headerName: "Table name", minWidth: 190, flex: 1 },
+          { field: "sourceObjectType", headerName: "Source object type", minWidth: 160 },
+        ]}
+        emptyMessage="No source database tables were found for this report's semantic model."
+        exportFileName={`${filePart(selectedReport?.name)}-source-db-lineage`}
+        exportContext={makeExportContext(workspace, selectedReport)}
+      />
+    </>}
+  </div>;
 }
 
-function buildMeasureLineage(parsed: ParsedSemanticModel, table: ParsedTable, measure: ParsedTable["measures"][number], dax: DaxAnalysis | undefined): LineageGraph {
-  const dependencies = dax?.dependencies ?? [];
-  const expressionIndex = buildExpressionIndex(parsed);
-  const seed: DependencyDaxReference = { object_type: "measure", table_name: table.name, object_name: measure.name, qualified_name: `${table.name}[${measure.name}]` };
-  const rootId = referenceKey(seed);
-  const closure = computeDependencyClosure(dependencies, [seed]);
-  const graph = closureToLineageGraph(closure, dependencies);
-  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+const CROSS_WORKSPACE_PROVIDER = "analysis_services";
 
-  const rootNode = nodeById.get(rootId);
-  if (rootNode) rootNode.detail = measure.expression ?? "Target measure";
-  closure.upstream.forEach((hop) => {
-    const node = nodeById.get(referenceKey(hop.reference));
-    if (node) node.detail = expressionIndex.get(objectKey(hop.reference.table_name, hop.reference.object_name)) ?? `${hop.reference.object_type} source`;
-  });
-  closure.downstream.forEach((hop) => {
-    const node = nodeById.get(referenceKey(hop.reference));
-    if (node) node.detail = expressionIndex.get(objectKey(hop.reference.table_name, hop.reference.object_name)) ?? `DAX ${hop.reference.object_type}`;
-  });
+/**
+ * A DirectQuery dependency on another workspace's semantic model arrives as
+ * `powerbi://api.powerbi.com/v1.0/myorg/<WORKSPACE NAME>`. That is not a
+ * hostname — only the workspace segment means anything to a reader.
+ */
+function powerBiWorkspaceName(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const marker = "/myorg/";
+  const index = value.toLowerCase().indexOf(marker);
+  if (index === -1 || !value.toLowerCase().startsWith("powerbi://")) return null;
+  const segment = value.slice(index + marker.length).split("/")[0];
+  return segment ? decodeURIComponent(segment) : null;
+}
 
-  return graph;
+function isCrossWorkspaceSource(provider: string | null | undefined, serverOrAccount: string | null | undefined): boolean {
+  return (provider ?? "").toLowerCase() === CROSS_WORKSPACE_PROVIDER || powerBiWorkspaceName(serverOrAccount) !== null;
+}
+
+/** Short, readable classification of where a table's data actually comes from. */
+function sourceOrigin(objectType: string, provider?: string | null, serverOrAccount?: string | null): string {
+  if (isCrossWorkspaceSource(provider, serverOrAccount)) return "Cross-workspace model";
+  switch (objectType) {
+    case "table": return "Database table";
+    case "view": return "Database view";
+    case "query": return "Native query";
+    case "file": return "File";
+    case "url": return "Web URL";
+    case "endpoint": return "Endpoint";
+    case "unknown": return "Unresolved";
+    default: return objectType || "Unresolved";
+  }
+}
+
+/**
+ * Account/database/schema are genuinely inapplicable for file, URL and
+ * endpoint rows, and genuinely untraceable for unresolved ones — say which,
+ * rather than rendering a row of identical blanks.
+ */
+function absentSourceValue(objectType: string): string {
+  if (objectType === "unknown") return "Not resolved";
+  if (objectType === "file" || objectType === "url" || objectType === "endpoint") return "Not applicable";
+  return "Not reported";
 }
 
 function NameSelector({ id, label, items, selectedId, onChange }: { id: string; label: string; items: Array<{ id: string; name: string }>; selectedId: string; onChange: (id: string) => void }) {
@@ -721,16 +771,6 @@ function semanticObjectRows(parsed: ParsedSemanticModel | undefined): ExplorerGr
     ...table.measures.map((measure) => ({ id: `measure-${table.name}-${measure.name}`, table: table.name, name: measure.name, kind: "Measure", dataType: "--", sourceColumn: "--", daxExpression: measure.expression ?? "--", visibility: measure.is_hidden ? "Hidden" : "Visible" })),
     ...table.hierarchies.map((hierarchy) => ({ id: `hierarchy-${table.name}-${hierarchy.name}`, table: table.name, name: hierarchy.name, kind: "Hierarchy", dataType: "--", sourceColumn: hierarchy.levels.map((level) => level.column).filter(Boolean).join(", ") || "--", daxExpression: "--", visibility: "Visible" })),
   ]);
-}
-
-function databaseColumnRows(parsed: ParsedSemanticModel | undefined, dax: DaxAnalysis | undefined): ExplorerGridRow[] {
-  if (!parsed) return [];
-  const expressionIndex = buildExpressionIndex(parsed);
-  return parsed.tables.flatMap((table) => table.columns.map((column) => {
-    const dependencies = (dax?.dependencies ?? []).filter((edge) => objectKey(edge.source.table_name, edge.source.object_name) === objectKey(table.name, column.name));
-    const useDetails = dependencies.map((edge) => `${edge.target.qualified_name}: ${expressionIndex.get(objectKey(edge.target.table_name, edge.target.object_name)) ?? "Expression not declared"}`);
-    return { id: `${table.name}-${column.name}`, sourceColumn: column.source_column ?? "Not declared", semanticTable: table.name, semanticColumn: column.name, dataType: column.data_type ?? "--", daxUsedBy: dependencies.length ? dependencies.map((edge) => edge.target.qualified_name).join(", ") : "No DAX use detected", daxExpressions: useDetails.join("\n\n") || "--", evidence: column.source_path ?? table.source_path ?? "No source path reported" };
-  }));
 }
 
 function buildExpressionIndex(parsed: ParsedSemanticModel | undefined) {
@@ -860,18 +900,26 @@ function ExplorerError({ text }: { text: string }) {
   return <div className="border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">{text}</div>;
 }
 
-async function requestJson<T>(apiOrigin: string, path: string, init?: RequestInit) {
-  const adminKey = useAppStore.getState().adminKey.trim();
-  const response = await fetch(`${apiOrigin}${path}`, { credentials: "include", ...init, headers: { "Content-Type": "application/json", ...(adminKey ? { "X-Lineage-Admin-Key": adminKey } : {}), ...init?.headers } });
-  const body = await readJsonResponse(response);
-  if (!response.ok) throw new Error(readError(body, response.status));
-  return body as T;
-}
-
-function readError(body: unknown, status: number) {
-  if (typeof body === "object" && body !== null && "detail" in body) {
-    const detail = (body as Record<string, unknown>).detail;
-    if (typeof detail === "string") return detail;
+/**
+ * Turns a failed query into the most accurate thing we can say about it: a 401
+ * means the backend's in-memory session is gone (any backend restart does
+ * this), a 403 means the identity is missing a scope or admin right, and
+ * anything else keeps the backend's own message plus its request_id.
+ */
+function EvidenceError({ error, fallback }: { error: unknown; fallback: string }) {
+  if (isSessionExpired(error)) {
+    return <div className="border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+      Your Power BI session has expired or the backend restarted. <a href="/workspace/power-bi" className="font-semibold underline">Sign in again</a> to continue.
+    </div>;
   }
-  return `Request failed with status ${status}.`;
+
+  const apiError = error instanceof ApiError ? error : null;
+  const message = isPermissionDenied(error)
+    ? `${apiError?.message ?? "This request was denied."} The signed-in identity is missing a Power BI/Fabric scope or admin right for this operation.`
+    : apiError?.message ?? fallback;
+
+  return <div className="border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+    <p>{message}</p>
+    {apiError?.requestId && <p className="mt-1 text-xs text-amber-800">Request ID: <code>{apiError.requestId}</code></p>}
+  </div>;
 }
