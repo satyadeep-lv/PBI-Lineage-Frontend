@@ -857,7 +857,7 @@ Semantic model --+--> Semantic table -> columns -> measures -> Reports -> Visual
   physical table behind two models is one node.
 - A focal object (a selected table's column or measure) is drawn only when a
   DAX edge links it to another drawn object or a visual reads it, which keeps
-  a table's unused columns out of the graph. A lone focal measure is always
+  a table's unused columns out of the graph. A lone focal object (Measure Impact's measure) is always
   drawn.
 - The selected tables (Table Impact) or the selected measure (Measure
   Impact) carry the focal ring.
@@ -967,7 +967,7 @@ whole, and traversal is always downstream.
 
 7. **Power AI.** When the resolved selection is exactly one semantic table,
    **Ask Power AI** appears, that table becomes the Power AI context, and the
-   graph centers on it.
+   graph uses it as its focus node.
 8. **Degradation.** Each source fails independently:
    - A failed workspace list shows `PowerBiAuthRequired`. A failed inventory
      says the table inventory is unavailable for this identity.
