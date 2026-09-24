@@ -3,14 +3,17 @@ import { Loader2 } from "lucide-react";
 import { isUnlocked, lockedReason } from "~/lib/power-ai-api";
 import { usePowerAiStatus } from "~/lib/use-power-ai-status";
 import { ChatInput } from "~/components/power-ai/chat-input";
-import { ContextIndicator } from "~/components/power-ai/context-indicator";
 import { ConversationView } from "~/components/power-ai/conversation-view";
-import { PersonaSelector } from "~/components/power-ai/persona-selector";
 import { PowerAiHeader } from "~/components/power-ai/power-ai-header";
 import { PowerAiLocked } from "~/components/power-ai/power-ai-locked";
 import { SuggestedQuestions } from "~/components/power-ai/suggested-questions";
 
-/** The one Power AI implementation, rendered inside the global docked panel on every page. */
+/**
+ * The one Power AI implementation, rendered inside the global docked panel on
+ * every page. It deliberately shows neither a context panel nor a persona
+ * picker: the assistant takes any question, and every answer is written at
+ * full technical detail rather than being tailored to a chosen reader.
+ */
 export function PowerAiContent({ onCollapse }: { onCollapse?: () => void }) {
   const statusQuery = usePowerAiStatus();
 
@@ -26,8 +29,6 @@ export function PowerAiContent({ onCollapse }: { onCollapse?: () => void }) {
         <PowerAiLocked reason={lockedReason(statusQuery.data)} />
       ) : (
         <>
-          <ContextIndicator />
-          <PersonaSelector />
           <ConversationView />
           <SuggestedQuestions />
           <ChatInput />

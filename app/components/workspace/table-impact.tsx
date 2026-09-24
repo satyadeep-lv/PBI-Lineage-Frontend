@@ -22,11 +22,16 @@ import {
 import type { GridRow } from "~/lib/grid-export";
 import {
   boundReportsForModel,
+  daxAnalysisKey,
   estateDiscoveryKey,
+  ESTATE_DISCOVER_PATH,
+  estateInventoryKey,
   fetchBatchedExplorer,
   fetchEstateInventory,
   modelKey,
   requestJson,
+  WORKSPACE_LIST_PATH,
+  workspaceListKey,
   type EstateDiscoveryResponse,
   type ParsedTable,
 } from "~/lib/lineage-api";
@@ -42,8 +47,6 @@ type VisualSourceLookupRow = { report_id: string; page_id: string; visual_id: st
 type ImpactDirection = "downstream" | "upstream";
 
 const WHOLE_TABLE = "__whole_table__";
-const heavyQueryOptions = { staleTime: 5 * 60 * 1000, gcTime: 30 * 60 * 1000, retry: false };
-
 export function TableImpact() {
   const apiOrigin = useAppStore((state) => state.apiOrigin);
   const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[] | null>(null);
@@ -52,10 +55,8 @@ export function TableImpact() {
   const [direction, setDirection] = useState<ImpactDirection>("downstream");
 
   const workspacesQuery = useQuery({
-    queryKey: ["table-impact", "workspaces", apiOrigin],
-    queryFn: () => requestJson<WorkspaceResponse>(apiOrigin, "/api/v1/workspaces?top=100&skip=0"),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
+    queryKey: workspaceListKey(apiOrigin),
+    queryFn: () => requestJson<WorkspaceResponse>(apiOrigin, WORKSPACE_LIST_PATH),
   });
   const workspaces = workspacesQuery.data?.workspaces ?? [];
   useEffect(() => {
@@ -65,12 +66,9 @@ export function TableImpact() {
   const scopedWorkspaces = useMemo(() => workspaces.filter((workspace) => scopeIds.includes(workspace.id)), [workspaces, scopeIds]);
 
   const inventoryQuery = useQuery({
-    queryKey: ["table-impact", "inventory", apiOrigin, [...scopeIds].sort().join(",")],
+    queryKey: estateInventoryKey(apiOrigin, scopeIds),
     queryFn: () => fetchEstateInventory(apiOrigin, scopedWorkspaces),
     enabled: scopeIds.length > 0,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    retry: false,
   });
   const tables = inventoryQuery.data?.tables ?? [];
   const tableEntries: SearchEntry[] = useMemo(() => tables.map((entry) => ({
@@ -88,18 +86,14 @@ export function TableImpact() {
   const selectedTable = parsedModelForEntry?.tables.find((table) => table.name === selectedEntry?.tableName) ?? null;
 
   const daxQuery = useQuery({
-    queryKey: ["table-impact", "dax-analysis", apiOrigin, selectedEntry?.workspaceId, selectedEntry?.semanticModelId],
+    queryKey: daxAnalysisKey(apiOrigin, selectedEntry?.workspaceId ?? "", selectedEntry?.semanticModelId ?? ""),
     queryFn: () => requestJson<DaxAnalysis>(apiOrigin, "/api/v1/lineage/dax/analyze", { method: "POST", body: JSON.stringify(parsedModelForEntry) }),
     enabled: Boolean(parsedModelForEntry),
-    ...heavyQueryOptions,
   });
 
   const estateQuery = useQuery({
     queryKey: estateDiscoveryKey(apiOrigin),
-    queryFn: () => requestJson<EstateDiscoveryResponse>(apiOrigin, "/api/v1/lineage/estate/discover?top=5000&skip=0"),
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    retry: false,
+    queryFn: () => requestJson<EstateDiscoveryResponse>(apiOrigin, ESTATE_DISCOVER_PATH),
   });
   const boundReports = useMemo(() => boundReportsForModel(estateQuery.data, selectedEntry?.semanticModelId ?? ""), [estateQuery.data, selectedEntry]);
 
@@ -110,7 +104,6 @@ export function TableImpact() {
       fetchBatchedExplorer<VisualSourceLookupRow>(apiOrigin, "/api/v1/explorer/visual-source-lookup", boundReports),
     ]),
     enabled: boundReports.length > 0,
-    ...heavyQueryOptions,
   });
 
   const dependencies = daxQuery.data?.dependencies ?? [];

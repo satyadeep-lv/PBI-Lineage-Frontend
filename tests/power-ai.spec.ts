@@ -70,21 +70,8 @@ test.describe("Power AI — global docked panel", () => {
     await page.goto("/");
     await page.getByRole("button", { name: "Open Power AI" }).click();
     await expect(page.getByPlaceholder("Ask Power AI...")).toBeVisible();
-    await expect(page.getByRole("radio", { name: "General" })).toBeVisible();
-  });
-
-  test("persona selection persists across a reload", async ({ page }) => {
-    await mockAiStatus(page, { status: 200, json: readyStatus() });
-    await page.goto("/");
-    await page.getByRole("button", { name: "Open Power AI" }).click();
-
-    await expect(page.getByRole("radio", { name: "General" })).toHaveAttribute("aria-checked", "true");
-    await page.getByRole("radio", { name: "Developer" }).click();
-    await expect(page.getByRole("radio", { name: "Developer" })).toHaveAttribute("aria-checked", "true");
-
-    await page.reload();
-    await page.getByRole("button", { name: "Open Power AI" }).click();
-    await expect(page.getByRole("radio", { name: "Developer" })).toHaveAttribute("aria-checked", "true");
+    // No persona picker: Power AI answers every question at one fixed level.
+    await expect(page.getByRole("radio")).toHaveCount(0);
   });
 });
 
@@ -101,9 +88,7 @@ test.describe("Power AI — context and Ask Power AI", () => {
     await page.getByRole("button", { name: "Ask Power AI" }).click();
 
     await expect(page.getByRole("heading", { name: "Power AI", exact: true })).toBeVisible();
-    await expect(page.getByText("Current context")).toBeVisible();
-    await expect(page.locator("dl").getByText("Table", { exact: true })).toBeVisible();
-    await expect(page.locator("dl").getByText("Sales", { exact: true })).toBeVisible();
+    await expect(page.getByText("Current context")).toHaveCount(0);
     await expect(page.getByPlaceholder("Ask Power AI...")).toHaveValue("Explain the Sales table");
   });
 
@@ -125,7 +110,7 @@ test.describe("Power AI — context and Ask Power AI", () => {
     expect(capturedBody).not.toBeNull();
     expect(capturedBody).toMatchObject({
       message: "Explain the Sales table",
-      audience: "general",
+      audience: "developer",
       context: { workspace_id: workspaceId, semantic_model_id: modelId, object_type: "table", object_name: "Sales" },
     });
   });

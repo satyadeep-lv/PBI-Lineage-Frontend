@@ -25,7 +25,6 @@ export function useWorkspaceScan(apiOrigin: string, workspaceIds: string[], flag
     queryKey: ["scanner", "status", apiOrigin, scanId],
     queryFn: () => getScanStatus(apiOrigin, scanId!),
     enabled: Boolean(scanId),
-    retry: false,
     refetchInterval: (query) => {
       const status = query.state.data?.status;
       return status && TERMINAL_STATUSES.has(status) ? false : 4000;
@@ -38,9 +37,6 @@ export function useWorkspaceScan(apiOrigin: string, workspaceIds: string[], flag
     queryKey: ["scanner", "result", apiOrigin, scanId],
     queryFn: () => getScanResult(apiOrigin, scanId!),
     enabled: Boolean(scanId) && status === "Succeeded",
-    staleTime: Infinity,
-    gcTime: 30 * 60 * 1000,
-    retry: false,
   });
 
   return {

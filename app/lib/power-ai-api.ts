@@ -217,6 +217,20 @@ export async function sendChatMessage(apiOrigin: string, request: PowerAiChatReq
   return body as AiChatResponse;
 }
 
+/**
+ * Same request and response shape as `/ai/chat`, but answered purely from
+ * gathered lineage evidence with no model call. It is deterministic, fast, and
+ * cannot fail because AI is disabled or a provider is unreachable — which is
+ * why the measure detail panel uses it instead of `/chat`. `usage` is always
+ * null here because no model was involved.
+ */
+export async function explainObject(apiOrigin: string, request: PowerAiChatRequest): Promise<AiChatResponse> {
+  const response = await aiFetch(apiOrigin, "/api/v1/ai/explain", { method: "POST", body: JSON.stringify(request) });
+  const body = await readJsonResponse(response);
+  if (!response.ok) throw toApiError(body, response.status);
+  return body as AiChatResponse;
+}
+
 function toApiError(body: unknown, status: number): PowerAiApiError {
   const detail = typeof body === "object" && body !== null && "detail" in body && typeof (body as Record<string, unknown>).detail === "string"
     ? String((body as Record<string, unknown>).detail)

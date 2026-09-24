@@ -22,11 +22,16 @@ import {
 import type { GridRow } from "~/lib/grid-export";
 import {
   boundReportsForModel,
+  daxAnalysisKey,
   estateDiscoveryKey,
+  ESTATE_DISCOVER_PATH,
+  estateInventoryKey,
   fetchBatchedExplorer,
   fetchEstateInventory,
   modelKey,
   requestJson,
+  WORKSPACE_LIST_PATH,
+  workspaceListKey,
   type EstateDiscoveryResponse,
 } from "~/lib/lineage-api";
 import { cn } from "~/lib/utils";
@@ -40,18 +45,14 @@ type MeasureSourceLineageRow = { report_id: string; semantic_table?: string | nu
 type VisualSourceLookupRow = { report_id: string; page_id: string; visual_id: string; semantic_table?: string | null; semantic_object_name?: string | null; match_status: "matched" | "unmatched" };
 type ImpactDirection = "upstream" | "downstream";
 
-const heavyQueryOptions = { staleTime: 5 * 60 * 1000, gcTime: 30 * 60 * 1000, retry: false };
-
 export function MeasureImpact() {
   const apiOrigin = useAppStore((state) => state.apiOrigin);
   const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[] | null>(null);
   const [selectedMeasureKey, setSelectedMeasureKey] = useState("");
 
   const workspacesQuery = useQuery({
-    queryKey: ["measure-impact", "workspaces", apiOrigin],
-    queryFn: () => requestJson<WorkspaceResponse>(apiOrigin, "/api/v1/workspaces?top=100&skip=0"),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
+    queryKey: workspaceListKey(apiOrigin),
+    queryFn: () => requestJson<WorkspaceResponse>(apiOrigin, WORKSPACE_LIST_PATH),
   });
   const workspaces = workspacesQuery.data?.workspaces ?? [];
   useEffect(() => {
@@ -61,12 +62,9 @@ export function MeasureImpact() {
   const scopedWorkspaces = useMemo(() => workspaces.filter((workspace) => scopeIds.includes(workspace.id)), [workspaces, scopeIds]);
 
   const inventoryQuery = useQuery({
-    queryKey: ["measure-impact", "inventory", apiOrigin, [...scopeIds].sort().join(",")],
+    queryKey: estateInventoryKey(apiOrigin, scopeIds),
     queryFn: () => fetchEstateInventory(apiOrigin, scopedWorkspaces),
     enabled: scopeIds.length > 0,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    retry: false,
   });
   const measures = inventoryQuery.data?.measures ?? [];
   const measureEntries: SearchEntry[] = useMemo(() => measures.map((entry) => ({
@@ -82,18 +80,14 @@ export function MeasureImpact() {
   const parsedModelForEntry = selectedEntry ? inventoryQuery.data?.parsedByModel.get(modelKey(selectedEntry.workspaceId, selectedEntry.semanticModelId)) : undefined;
 
   const daxQuery = useQuery({
-    queryKey: ["measure-impact", "dax-analysis", apiOrigin, selectedEntry?.workspaceId, selectedEntry?.semanticModelId],
+    queryKey: daxAnalysisKey(apiOrigin, selectedEntry?.workspaceId ?? "", selectedEntry?.semanticModelId ?? ""),
     queryFn: () => requestJson<DaxAnalysis>(apiOrigin, "/api/v1/lineage/dax/analyze", { method: "POST", body: JSON.stringify(parsedModelForEntry) }),
     enabled: Boolean(parsedModelForEntry),
-    ...heavyQueryOptions,
   });
 
   const estateQuery = useQuery({
     queryKey: estateDiscoveryKey(apiOrigin),
-    queryFn: () => requestJson<EstateDiscoveryResponse>(apiOrigin, "/api/v1/lineage/estate/discover?top=5000&skip=0"),
-    staleTime: 10 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-    retry: false,
+    queryFn: () => requestJson<EstateDiscoveryResponse>(apiOrigin, ESTATE_DISCOVER_PATH),
   });
   const boundReports = useMemo(() => boundReportsForModel(estateQuery.data, selectedEntry?.semanticModelId ?? ""), [estateQuery.data, selectedEntry]);
 
@@ -104,7 +98,6 @@ export function MeasureImpact() {
       fetchBatchedExplorer<VisualSourceLookupRow>(apiOrigin, "/api/v1/explorer/visual-source-lookup", boundReports),
     ]),
     enabled: boundReports.length > 0,
-    ...heavyQueryOptions,
   });
 
   const seed: DaxReference | null = selectedEntry && selectedEntry.measureName

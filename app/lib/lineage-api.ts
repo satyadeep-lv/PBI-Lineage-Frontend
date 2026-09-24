@@ -96,6 +96,18 @@ export function toApiError(body: unknown, status: number, headerRequestId?: stri
   return new ApiError(`Request failed with status ${status}.`, status, { requestId: fallbackRequestId });
 }
 
+/**
+ * Drops this user's server-side cached provider reads. The backend caches
+ * workspaces, reports, semantic-model lists, gateways and both Fabric
+ * definition calls for the whole session, so a report edited in Power BI can
+ * otherwise take up to 30 minutes to appear. It never touches anyone else's
+ * cache. Clearing the browser's query cache alone is not enough — the next
+ * request would just be served the backend's stale copy.
+ */
+export async function clearServerCache(apiOrigin: string): Promise<void> {
+  await requestJson<unknown>(apiOrigin, "/api/v1/cache", { method: "DELETE" });
+}
+
 /** Every report bound to a semantic model, estate-wide, from an already-fetched estate/discover response. */
 export function boundReportsForModel(estate: EstateDiscoveryResponse | undefined, semanticModelId: string): ExplorerReportSelection[] {
   if (!estate || !semanticModelId) return [];
@@ -157,6 +169,21 @@ export async function fetchBatchedExplorer<TRow>(
   return { rows, truncated: selections.length > capped.length };
 }
 
+/**
+ * Query keys for requests that are identical no matter which page issues them.
+ * Every page that needs one of these must use the shared key rather than
+ * namespacing it under its own page name: the request URL and body are the
+ * same, so a page-scoped key only buys a second round trip for a payload the
+ * cache already holds. The declared TypeScript shapes differ per page — each is
+ * a subset of the same response — which is safe because the cached value is
+ * always the full body the backend returned.
+ */
+export const WORKSPACE_LIST_PATH = "/api/v1/workspaces?top=100&skip=0";
+export const ESTATE_DISCOVER_PATH = "/api/v1/lineage/estate/discover?top=5000&skip=0";
+
+export function workspaceListKey(apiOrigin: string) {
+  return ["workspaces", "list", apiOrigin] as const;
+}
 export function parsedSemanticModelKey(apiOrigin: string, workspaceId: string, modelId: string) {
   return ["semantic-model", "parsed", apiOrigin, workspaceId, modelId] as const;
 }
@@ -165,6 +192,10 @@ export function daxAnalysisKey(apiOrigin: string, workspaceId: string, modelId: 
 }
 export function estateDiscoveryKey(apiOrigin: string) {
   return ["lineage", "estate-discover", apiOrigin] as const;
+}
+/** Keyed on the workspace scope because `fetchEstateInventory` parses every model in it — by far the most expensive thing the frontend does. */
+export function estateInventoryKey(apiOrigin: string, workspaceIds: string[]) {
+  return ["lineage", "estate-inventory", apiOrigin, [...workspaceIds].sort().join(",")] as const;
 }
 
 export type ParsedColumn = { name: string; expression?: string | null };

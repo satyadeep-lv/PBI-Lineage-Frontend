@@ -1,6 +1,4 @@
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
-
 import type { AiChatResponseStatus, EvidenceItem, GroundedClaim, PowerAIContext, PowerAiAudience } from "~/lib/power-ai-api";
 
 // Re-exported so existing `from "~/stores/power-ai-store"` imports keep working —
@@ -36,7 +34,7 @@ export type PowerAIState = {
   error?: string;
   /** A question seeded by "Ask Power AI" that the chat input should prefill next render. */
   pendingQuestion?: string;
-  /** The global floating widget's open/closed state — shared so "Ask Power AI" can open it from any page. Deliberately excluded from `partialize` below, so it is never persisted. */
+  /** The global floating widget's open/closed state — shared so "Ask Power AI" can open it from any page. Nothing in this store is persisted, so it always starts closed. */
   widgetOpen: boolean;
 
   setContext: (context: PowerAIContext) => void;
@@ -54,13 +52,12 @@ export type PowerAIState = {
 };
 
 export const usePowerAiStore = create<PowerAIState>()(
-  persist(
-    (set) => ({
+  ((set) => ({
       conversationId: undefined,
       messages: [],
       loading: false,
       streaming: false,
-      audience: "general",
+      audience: "developer",
       context: {},
       error: undefined,
       pendingQuestion: undefined,
@@ -79,11 +76,5 @@ export const usePowerAiStore = create<PowerAIState>()(
       setPendingQuestion: (pendingQuestion) => set({ pendingQuestion }),
       setWidgetOpen: (widgetOpen) => set({ widgetOpen }),
       resetConversation: () => set({ conversationId: undefined, messages: [], error: undefined, loading: false, streaming: false }),
-    }),
-    {
-      name: "pbi-power-ai",
-      storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ audience: state.audience }),
-    },
-  ),
+    })),
 );

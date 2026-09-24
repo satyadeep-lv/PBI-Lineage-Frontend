@@ -1,10 +1,12 @@
-import { useQuery } from "@tanstack/react-query";
+import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2,
   CircleAlert,
   Loader2,
   Menu,
+  RefreshCw,
 } from "lucide-react";
+import { useState } from "react";
 import { Link, useLocation } from "react-router";
 
 import { Badge } from "~/components/ui/badge";
@@ -17,6 +19,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "~/components/ui/sheet";
+import { clearServerCache } from "~/lib/lineage-api";
 import { cn } from "~/lib/utils";
 import { useAppStore } from "~/stores/app-store";
 
@@ -52,6 +55,46 @@ async function checkHealth(apiOrigin: string) {
   return response.json() as Promise<unknown>;
 }
 
+/**
+ * Both layers cache for the session, so both have to be cleared together. The
+ * backend caches provider reads per signed-in user, and the browser caches the
+ * responses it already has — clearing only one means the other serves the
+ * stale copy and the button appears to do nothing. Server cache first, then
+ * reset the query cache so whatever is on screen refetches against fresh data.
+ */
+function RefreshDataButton() {
+  const queryClient = useQueryClient();
+  const apiOrigin = useAppStore((state) => state.apiOrigin);
+  const fetching = useIsFetching();
+  const [isClearing, setIsClearing] = useState(false);
+
+  async function refresh() {
+    setIsClearing(true);
+    try {
+      await clearServerCache(apiOrigin);
+    } catch {
+      // A failed cache drop must not strand the user on stale data: reset the
+      // browser cache anyway and let the refetch surface the real error.
+    } finally {
+      setIsClearing(false);
+      void queryClient.resetQueries();
+    }
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => void refresh()}
+      className="text-white hover:bg-white/10 hover:text-white"
+      aria-label="Refresh data"
+      title="Refresh data — drops the server-side and browser caches, then reloads what is on screen"
+    >
+      <RefreshCw className={cn("size-4", (isClearing || fetching > 0) && "animate-spin")} />
+    </Button>
+  );
+}
+
 export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
   const apiOrigin = useAppStore((state) => state.apiOrigin);
   const { pathname } = useLocation();
@@ -85,6 +128,7 @@ export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          <RefreshDataButton />
           {showHealth ? <HealthBadge query={healthQuery} compact /> : null}
 
           <Sheet>

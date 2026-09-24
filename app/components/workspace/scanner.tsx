@@ -10,7 +10,7 @@ import { PowerBiAuthRequired } from "~/components/workspace/auth-required";
 import { ImpactGrid } from "~/components/workspace/impact-grid";
 import { WorkspaceScopeSelect } from "~/components/workspace/impact-picker";
 import type { GridRow } from "~/lib/grid-export";
-import { requestJson } from "~/lib/lineage-api";
+import { requestJson, WORKSPACE_LIST_PATH, workspaceListKey } from "~/lib/lineage-api";
 import {
   type ScanFlags,
   type ScannerDatasourceInstance,
@@ -52,10 +52,8 @@ export function Scanner() {
   });
 
   const workspacesQuery = useQuery({
-    queryKey: ["scanner-page", "workspaces", apiOrigin],
-    queryFn: () => requestJson<WorkspaceResponse>(apiOrigin, "/api/v1/workspaces?top=100&skip=0"),
-    staleTime: 5 * 60 * 1000,
-    retry: false,
+    queryKey: workspaceListKey(apiOrigin),
+    queryFn: () => requestJson<WorkspaceResponse>(apiOrigin, WORKSPACE_LIST_PATH),
   });
   const workspaces = workspacesQuery.data?.workspaces ?? [];
 
