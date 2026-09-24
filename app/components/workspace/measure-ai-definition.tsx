@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { AnswerView } from "~/components/power-ai/answer-view";
 import { CopyButton } from "~/components/power-ai/copy-button";
-import { LineageStrip } from "~/components/power-ai/lineage-strip";
 import { Button } from "~/components/ui/button";
 import {
   buildChatRequest,
@@ -16,7 +15,6 @@ import {
 import { parseAnswer, sectionTabs } from "~/lib/power-ai-answer";
 import { contextForEntity, entityQuestion, type AnswerEntity } from "~/lib/power-ai-entities";
 import { evidenceLine, groupBySection, isContextItem } from "~/lib/power-ai-evidence";
-import { measureLineageLayers } from "~/lib/power-ai-lineage";
 import { AI_ERROR_COPY } from "~/lib/use-power-ai-chat";
 import { prefersReducedMotion } from "~/lib/use-revealed-text";
 import { cn } from "~/lib/utils";
@@ -227,7 +225,6 @@ export function MeasureAiDefinition({ measures, context }: { measures: MeasureDe
   const target = result?.target ?? null;
   const sections = useMemo(() => parseAnswer(response?.answer ?? ""), [response]);
   const tabs = useMemo(() => sectionTabs(sections).filter((tab) => PANEL_TABS.has(tab.label)), [sections]);
-  const layers = useMemo(() => (response && target ? measureLineageLayers(response.evidence, target) : []), [response, target]);
   const generating = generatingSince !== null;
 
   return <section className="border border-zinc-200">
@@ -279,8 +276,6 @@ export function MeasureAiDefinition({ measures, context }: { measures: MeasureDe
               </div>
 
               {STATUS_NOTE[response.status] && <p className="flex items-start gap-1.5 rounded-md bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900"><MessageCircleQuestionMark className="mt-0.5 size-3.5 shrink-0" aria-hidden />{STATUS_NOTE[response.status]}</p>}
-
-              <LineageStrip layers={layers} onEntity={onEntity} disabled={generating} />
 
               <div className="space-y-3">
                 {tabs.length > 1 && (

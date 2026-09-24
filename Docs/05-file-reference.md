@@ -65,9 +65,9 @@ This page lists maintained source and operational files. Generated
 | File | Purpose |
 | --- | --- |
 | `app/components/workspace/lineage/lineage-types.ts` | Shared graph, node, edge, and React Flow node-data contracts. |
-| `app/components/workspace/lineage/lineage-layout.ts` | Dagre layout and dynamic node-height estimation. |
+| `app/components/workspace/lineage/lineage-layout.ts` | Lazy, worker-backed ELK layered layout, fallback positioning, and dynamic node-height estimation. |
 | `app/components/workspace/lineage/lineage-node.tsx` | Tone-coded custom node with collapse/expand control and hidden count. |
-| `app/components/workspace/lineage/lineage-diagram.tsx` | Visible subgraph derivation, collapse state, layout, React Flow rendering, controls, and arrowheads. |
+| `app/components/workspace/lineage/lineage-diagram.tsx` | Visible subgraph derivation, collapse state, draggable React Flow rendering, viewport/reset controls, large-graph culling, and arrowheads. |
 
 ## API, Query, State, And Export Utilities
 

@@ -15,12 +15,14 @@ export type LineageNodeKind =
   | "visual";
 
 export type LineageDirection = "LR" | "TB";
+export type LineageVerticalFlow = "down" | "up";
 
 export type LineageGraphNode = {
   id: string;
   kind: LineageNodeKind;
   label: string;
   detail?: string;
+  tooltip?: string;
   isFocal?: boolean;
   metadata?: Record<string, unknown>;
 };
@@ -41,12 +43,14 @@ export type LineageFlowNodeData = {
   kind: LineageNodeKind;
   label: string;
   detail?: string;
+  tooltip?: string;
   isFocal: boolean;
   collapsed: boolean;
   hasChildren: boolean;
   descendantCount: number;
   height: number;
   direction: LineageDirection;
+  verticalFlow: LineageVerticalFlow;
   onToggle: (id: string) => void;
   [key: string]: unknown;
 };

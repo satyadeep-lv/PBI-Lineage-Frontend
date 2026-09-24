@@ -24,7 +24,7 @@ test.describe("desktop app shell", () => {
     await expect(page.getByRole("navigation", { name: "Workspace navigation" }).getByRole("button", { name: "Explorer" })).toBeVisible();
   });
 
-  test("Power AI is a floating overlay on desktop too — it never reserves permanent canvas width", async ({ page }) => {
+  test("Power AI docks beside the desktop workspace and preserves independent sidebar resizing", async ({ page }) => {
     await mockShellBackend(page);
     await page.goto("/workspace/power-bi");
     await expect(page.getByRole("heading", { name: "Connect Power BI and Fabric" })).toBeVisible({ timeout: 60_000 });
@@ -35,15 +35,44 @@ test.describe("desktop app shell", () => {
     await page.getByRole("button", { name: "Open Power AI" }).click();
     await expect(page.getByRole("heading", { name: "Power AI", exact: true })).toBeVisible();
 
-    // Opening Power AI floats over the canvas rather than shrinking it.
+    // Wide desktop keeps all three columns visible: opening Power AI gives it
+    // dedicated width instead of obscuring the workspace canvas.
     const mainWidthOpen = await mainCanvasWidth(page);
-    expect(mainWidthOpen).toBe(mainWidthClosed);
+    expect(mainWidthOpen).toBeLessThan(mainWidthClosed);
 
     // Left nav collapse still resizes the canvas independently, unaffected by Power AI.
     await page.getByRole("button", { name: "Collapse navigation" }).click();
     await expect(page.getByRole("button", { name: "Expand navigation" })).toBeVisible();
     const mainWidthNavCollapsed = await mainCanvasWidth(page);
     expect(mainWidthNavCollapsed).toBeGreaterThan(mainWidthOpen);
+  });
+
+  test("theme selection supports dark, light, and persisted system preference", async ({ page }) => {
+    await mockShellBackend(page);
+    await page.emulateMedia({ colorScheme: "dark" });
+    await page.goto("/workspace/power-bi");
+    await expect(page.getByRole("heading", { name: "Connect Power BI and Fabric" })).toBeVisible({ timeout: 60_000 });
+
+    await expect(page.locator("html")).toHaveClass(/dark/);
+    await page.getByRole("button", { name: /Theme: system/i }).click();
+    await page.getByRole("menuitem", { name: "Light" }).click();
+    await expect(page.locator("html")).not.toHaveClass(/dark/);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("themePreference"))).toBe("light");
+
+    await page.reload();
+    await expect(page.locator("html")).not.toHaveClass(/dark/);
+    await expect(page.getByRole("heading", { name: "Connect Power BI and Fabric" })).toBeVisible({ timeout: 60_000 });
+    await page.screenshot({ path: "test-results/workspace-light-desktop.png", fullPage: true });
+    await page.getByRole("button", { name: /Theme: light/i }).click();
+    await page.getByRole("menuitem", { name: "Dark" }).click();
+    await expect(page.locator("html")).toHaveClass(/dark/);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("themePreference"))).toBe("dark");
+    await page.screenshot({ path: "test-results/workspace-dark-desktop.png", fullPage: true });
+
+    await page.getByRole("button", { name: /Theme: dark/i }).click();
+    await page.getByRole("menuitem", { name: "System" }).click();
+    await expect(page.locator("html")).toHaveClass(/dark/);
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("themePreference"))).toBe("system");
   });
 });
 

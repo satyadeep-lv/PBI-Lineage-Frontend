@@ -79,25 +79,25 @@ export function ApiDocumentation({
   );
 
   return (
-    <section className="border border-zinc-200 bg-white">
-      <div className="border-b border-zinc-200 px-5 py-5 sm:px-6">
+    <section className="overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="border-b border-border px-5 py-5 sm:px-6">
         <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-start">
           <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-[8px] bg-zinc-950 text-white">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-fabric text-primary-foreground">
               <BookOpenText className="size-5" />
             </span>
             <div>
               <div className="mb-1 flex flex-wrap items-center gap-2">
-                <span className="text-xs font-semibold uppercase text-zinc-500">Reference</span>
-                <Badge className="rounded-[8px] border border-zinc-200 bg-zinc-50 text-zinc-700">
+                <span className="text-xs font-semibold uppercase text-fabric">Reference</span>
+                <Badge className="rounded-md border border-border bg-subtle text-foreground">
                   {endpoints.length} operations
                 </Badge>
-                <Badge className="rounded-[8px] border border-emerald-200 bg-emerald-50 text-emerald-800">
+                <Badge className="rounded-md border border-success/30 bg-success/10 text-success">
                   <Zap className="size-3" /> Execution enabled
                 </Badge>
               </div>
               <h1 className="text-lg font-semibold">API documentation</h1>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
                 Browse grouped service operations, set request values, and execute them against the connected PBI Lineage backend.
               </p>
             </div>
@@ -191,14 +191,14 @@ function GroupButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-8 items-center gap-2 rounded-[8px] border px-3 text-xs font-medium transition",
+        "inline-flex h-8 items-center gap-2 rounded-md border px-3 text-xs font-medium transition-colors",
         active
-          ? "border-zinc-950 bg-zinc-950 text-white"
-          : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400 hover:text-zinc-950",
+          ? "border-fabric bg-fabric text-primary-foreground"
+          : "border-border bg-surface text-muted-foreground hover:border-fabric/50 hover:text-foreground",
       )}
     >
       {label}
-      <span className={cn("text-[11px]", active ? "text-zinc-300" : "text-zinc-400")}>{count}</span>
+      <span className={cn("text-[11px]", active ? "text-primary-foreground/75" : "text-muted-foreground")}>{count}</span>
     </button>
   );
 }

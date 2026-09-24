@@ -24,7 +24,7 @@ export function ChatInput() {
   }
 
   return (
-    <div className="border-t border-zinc-200 p-3">
+    <div className="border-t border-border bg-surface p-3">
       <div className="flex items-end gap-2">
         <Textarea
           value={value}

@@ -11,6 +11,7 @@ import { Link, useLocation } from "react-router";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { ThemeToggle } from "~/components/theme-toggle";
 import {
   Sheet,
   SheetContent,
@@ -86,7 +87,7 @@ function RefreshDataButton() {
       variant="ghost"
       size="icon"
       onClick={() => void refresh()}
-      className="text-white hover:bg-white/10 hover:text-white"
+      className="text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       aria-label="Refresh data"
       title="Refresh data — drops the server-side and browser caches, then reloads what is on screen"
     >
@@ -107,17 +108,17 @@ export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
   });
 
   return (
-    <header className="sticky top-0 z-40 border-b border-zinc-800 bg-zinc-950/95 backdrop-blur-sm">
+    <header className="sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-sm">
       <div className="mx-auto flex min-h-16 max-w-screen-2xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex min-w-0 items-center gap-3" aria-label="PBI Lineage Explorer home">
-          <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-white">
+          <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-white">
             <img src="/tab_logo.png" alt="" className="size-full object-cover" />
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-white sm:text-base">
+            <span className="block truncate text-sm font-semibold text-foreground sm:text-base">
               PBI Lineage Explorer
             </span>
-            <span className="hidden truncate text-xs text-zinc-400 sm:block">
+            <span className="hidden truncate text-xs text-muted-foreground sm:block">
               Analytics lineage and impact intelligence
             </span>
           </span>
@@ -130,6 +131,7 @@ export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
         <div className="flex shrink-0 items-center gap-2">
           <RefreshDataButton />
           {showHealth ? <HealthBadge query={healthQuery} compact /> : null}
+          <ThemeToggle />
 
           <Sheet>
             <SheetTrigger
@@ -137,15 +139,15 @@ export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-white hover:bg-white/10 hover:text-white lg:hidden"
+                  className="text-muted-foreground hover:bg-accent hover:text-accent-foreground lg:hidden"
                   aria-label="Open navigation menu"
                 />
               }
             >
               <Menu className="size-5" />
             </SheetTrigger>
-            <SheetContent side="right" className="w-[min(22rem,88vw)] border-zinc-200 p-0">
-              <SheetHeader className="border-b border-zinc-200 px-5 py-5">
+            <SheetContent side="right" className="w-[min(22rem,88vw)] border-border p-0">
+              <SheetHeader className="border-b border-border px-5 py-5">
                 <SheetTitle>Navigation</SheetTitle>
                 <SheetDescription>Move between guidance, setup, analysis, and APIs.</SheetDescription>
               </SheetHeader>
@@ -160,8 +162,8 @@ export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
                       className={cn(
                         "border-l-2 px-4 py-3 text-sm font-medium transition-colors",
                         active
-                          ? "border-zinc-950 bg-zinc-100 text-zinc-950"
-                          : "border-transparent text-zinc-600 hover:bg-zinc-50 hover:text-zinc-950",
+                          ? "border-fabric bg-accent text-accent-foreground"
+                          : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
                       )}
                     >
                       {item.label}
@@ -170,8 +172,8 @@ export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
                 })}
               </nav>
               {showHealth ? (
-                <div className="mt-auto border-t border-zinc-200 p-5">
-                  <p className="mb-2 text-xs font-medium text-zinc-500">Backend connection</p>
+                <div className="mt-auto border-t border-border p-5">
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">Backend connection</p>
                   <HealthBadge query={healthQuery} />
                 </div>
               ) : null}
@@ -194,8 +196,8 @@ function HeaderNavigation({ pathname }: { pathname: string }) {
             to={item.to}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "relative flex items-center px-3 text-sm font-medium text-zinc-400 transition-colors hover:text-white lg:px-4",
-              active && "text-white after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-white lg:after:inset-x-4",
+              "relative flex items-center px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground lg:px-4",
+              active && "text-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-fabric lg:after:inset-x-4",
             )}
           >
             {item.label}
@@ -217,12 +219,12 @@ function HealthBadge({ query, compact = false }: { query: HealthQuery; compact?:
   return (
     <Badge
       className={cn(
-        "rounded-[8px] border px-2.5 py-1",
+        "rounded-md border px-2.5 py-1",
         query.isSuccess
-          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+          ? "border-success/30 bg-success/10 text-success"
           : query.isLoading
-            ? "border-amber-200 bg-amber-50 text-amber-800"
-            : "border-rose-200 bg-rose-50 text-rose-800",
+            ? "border-warning/30 bg-warning/10 text-warning"
+            : "border-error/30 bg-error/10 text-error",
       )}
     >
       {query.isSuccess ? (

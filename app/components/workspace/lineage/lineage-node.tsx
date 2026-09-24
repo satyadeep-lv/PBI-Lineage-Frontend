@@ -1,22 +1,24 @@
 import { Handle, Position, type NodeProps, type NodeTypes } from "@xyflow/react";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { memo } from "react";
 
 import { LINEAGE_NODE_WIDTH } from "./lineage-layout";
 import type { LineageFlowNode, LineageNodeKind } from "./lineage-types";
+import { cn } from "~/lib/utils";
 
-export const KIND_STYLES: Record<LineageNodeKind, { border: string; background: string; accent: string }> = {
-  workspace: { border: "#fda4af", background: "#fff1f2", accent: "#9f1239" },
-  "database-source": { border: "#86efac", background: "#f0fdf4", accent: "#166534" },
-  table: { border: "#7dd3fc", background: "#f0f9ff", accent: "#075985" },
-  "semantic-model": { border: "#5eead4", background: "#f0fdfa", accent: "#115e59" },
-  column: { border: "#bae6fd", background: "#f0f9ff", accent: "#0369a1" },
-  "calculated-column": { border: "#fdba74", background: "#fff7ed", accent: "#9a3412" },
-  "calculated-table": { border: "#fdba74", background: "#fff7ed", accent: "#9a3412" },
-  measure: { border: "#c4b5fd", background: "#faf5ff", accent: "#6d28d9" },
-  hierarchy: { border: "#d4d4d8", background: "#fafafa", accent: "#3f3f46" },
-  report: { border: "#fda4af", background: "#fff1f2", accent: "#9f1239" },
-  page: { border: "#fcd34d", background: "#fffbeb", accent: "#92400e" },
-  visual: { border: "#d4d4d8", background: "#ffffff", accent: "#3f3f46" },
+export const KIND_STYLES: Record<LineageNodeKind, { container: string; accent: string }> = {
+  workspace: { container: "border-rose-300 bg-rose-50", accent: "text-rose-800" },
+  "database-source": { container: "border-emerald-300 bg-emerald-50", accent: "text-emerald-800" },
+  table: { container: "border-sky-300 bg-sky-50", accent: "text-sky-800" },
+  "semantic-model": { container: "border-teal-300 bg-teal-50", accent: "text-teal-800" },
+  column: { container: "border-sky-200 bg-sky-50", accent: "text-sky-700" },
+  "calculated-column": { container: "border-orange-300 bg-orange-50", accent: "text-orange-800" },
+  "calculated-table": { container: "border-orange-300 bg-orange-50", accent: "text-orange-800" },
+  measure: { container: "border-violet-300 bg-violet-50", accent: "text-violet-800" },
+  hierarchy: { container: "border-border bg-subtle", accent: "text-foreground" },
+  report: { container: "border-rose-300 bg-rose-50", accent: "text-rose-800" },
+  page: { container: "border-amber-300 bg-amber-50", accent: "text-amber-800" },
+  visual: { container: "border-border bg-surface", accent: "text-foreground" },
 };
 
 function abbreviate(value: string, length: number) {
@@ -24,18 +26,22 @@ function abbreviate(value: string, length: number) {
   return clean.length > length ? `${clean.slice(0, length - 3)}...` : clean;
 }
 
-function LineageNode({ id, data }: NodeProps<LineageFlowNode>) {
+const LineageNode = memo(function LineageNode({ id, data }: NodeProps<LineageFlowNode>) {
   const style = KIND_STYLES[data.kind];
-  const [targetPosition, sourcePosition] = data.direction === "TB" ? [Position.Top, Position.Bottom] : [Position.Left, Position.Right];
+  const [targetPosition, sourcePosition] = data.direction === "TB"
+    ? data.verticalFlow === "up"
+      ? [Position.Bottom, Position.Top]
+      : [Position.Top, Position.Bottom]
+    : [Position.Left, Position.Right];
 
   return (
     <div
-      style={{ width: LINEAGE_NODE_WIDTH, border: `1px solid ${style.border}`, background: style.background, boxShadow: data.isFocal ? `0 0 0 2px ${style.accent}` : "none" }}
-      className="relative rounded-md p-2.5"
+      style={{ width: LINEAGE_NODE_WIDTH }}
+      className={cn("relative cursor-grab rounded-md border p-2.5 active:cursor-grabbing", style.container, data.isFocal && "ring-2 ring-fabric ring-offset-2 ring-offset-background")}
     >
       <Handle type="target" position={targetPosition} />
-      <div className="max-w-full text-left" title={`${data.label}\n${data.detail ?? ""}`}>
-        <div className="break-words text-xs font-semibold" style={{ color: style.accent }}>{data.label}</div>
+      <div className="max-w-full text-left" title={data.tooltip ?? `${data.label}\n${data.detail ?? ""}`}>
+        <div className={cn("break-words text-xs font-semibold", style.accent)}>{data.label}</div>
         {data.detail && <div className="mt-1 break-words text-[11px] leading-4 text-zinc-600">{abbreviate(data.detail, 130)}</div>}
       </div>
       {data.hasChildren && (
@@ -52,6 +58,6 @@ function LineageNode({ id, data }: NodeProps<LineageFlowNode>) {
       <Handle type="source" position={sourcePosition} />
     </div>
   );
-}
+});
 
 export const LINEAGE_NODE_TYPES: NodeTypes = { lineage: LineageNode };

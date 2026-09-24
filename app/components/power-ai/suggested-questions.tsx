@@ -21,7 +21,7 @@ export function SuggestedQuestions() {
             type="button"
             disabled={loading}
             onClick={() => void send(question)}
-            className="rounded-full border border-zinc-200 px-2.5 py-1 text-xs text-zinc-700 hover:border-zinc-950 hover:text-zinc-950 disabled:opacity-50"
+            className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-fabric hover:text-foreground disabled:opacity-50"
           >
             {question}
           </button>

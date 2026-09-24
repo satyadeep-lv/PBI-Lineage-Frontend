@@ -2,6 +2,8 @@ import { Columns3, GitBranch, Loader2 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { Button } from "~/components/ui/button";
+import { LineageDiagram } from "~/components/workspace/lineage/lineage-diagram";
+import type { LineageGraph } from "~/components/workspace/lineage/lineage-types";
 import { ApiError, isSessionExpired, requestJson } from "~/lib/lineage-api";
 import { useAppStore } from "~/stores/app-store";
 
@@ -137,7 +139,7 @@ export function SnowflakeObjectLineage({ targets }: { targets: SnowflakeTraceTar
               {isTracing ? "Tracing" : "Trace lineage"}
             </Button>
           </div>
-          <SnowflakeTraceOutcome result={result} error={error} />
+          <SnowflakeTraceOutcome result={result} error={error} diagram="table" />
         </div>}
   </section>;
 }
@@ -180,7 +182,7 @@ export function SnowflakeColumnLineage({ targets }: { targets: SnowflakeColumnTa
               {isTracing ? "Tracing" : "Trace column"}
             </Button>
           </div>
-          <SnowflakeTraceOutcome result={result} error={error} />
+          <SnowflakeTraceOutcome result={result} error={error} diagram="column" />
         </div>}
   </section>;
 }
@@ -201,7 +203,7 @@ function SelectField({ id, label, value, onChange, mono = false, children }: { i
   </div>;
 }
 
-function SnowflakeTraceOutcome({ result, error }: { result: SnowflakeTraceResponse | null; error: unknown }) {
+function SnowflakeTraceOutcome({ result, error, diagram }: { result: SnowflakeTraceResponse | null; error: unknown; diagram?: "table" | "column" }) {
   if (error != null) return <SnowflakeTraceError error={error} />;
   if (!result) return null;
 
@@ -226,31 +228,111 @@ function SnowflakeTraceOutcome({ result, error }: { result: SnowflakeTraceRespon
 
     {dependencies.length === 0
       ? <p className="border border-zinc-200 bg-zinc-50 p-4 text-sm leading-6 text-zinc-600">Snowflake reported no {result.direction.toLowerCase()} dependencies for this {result.object_domain.toLowerCase()}. That is an answer, not a failure — a column loaded straight from an ingested table genuinely has none.</p>
-      : <div className="overflow-x-auto border border-zinc-200">
-          <table className="w-full min-w-[860px] border-collapse text-sm">
-            <thead className="bg-zinc-50 text-left text-xs font-semibold text-zinc-600">
-              <tr>
-                <th className="border-b border-zinc-200 px-3 py-2">Source</th>
-                <th className="border-b border-zinc-200 px-3 py-2">Target</th>
-                <th className="border-b border-zinc-200 px-3 py-2">Domain</th>
-                <th className="border-b border-zinc-200 px-3 py-2">Dependency</th>
-                <th className="border-b border-zinc-200 px-3 py-2">Distance</th>
-                <th className="border-b border-zinc-200 px-3 py-2">Process</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dependencies.map((dependency, index) => <tr key={`${dependency.source.object_id}-${dependency.target.object_id}-${index}`} className="align-top hover:bg-zinc-50">
-                <td className="border-b border-zinc-100 px-3 py-2 font-mono text-xs">{qualify(dependency.source)}</td>
-                <td className="border-b border-zinc-100 px-3 py-2 font-mono text-xs">{qualify(dependency.target)}</td>
-                <td className="border-b border-zinc-100 px-3 py-2 text-xs">{dependency.target.object_domain}</td>
-                <td className="border-b border-zinc-100 px-3 py-2 text-xs">{dependency.dependency_type}</td>
-                <td className="border-b border-zinc-100 px-3 py-2 text-xs">{dependency.distance ?? "--"}</td>
-                <td className="border-b border-zinc-100 px-3 py-2 text-xs">{processSummary(dependency.process)}</td>
-              </tr>)}
-            </tbody>
-          </table>
-        </div>}
+      : <>
+          <div className="overflow-x-auto border border-zinc-200">
+            <table className="w-full min-w-[860px] border-collapse text-sm">
+              <thead className="bg-zinc-50 text-left text-xs font-semibold text-zinc-600">
+                <tr>
+                  <th className="border-b border-zinc-200 px-3 py-2">Source</th>
+                  <th className="border-b border-zinc-200 px-3 py-2">Target</th>
+                  <th className="border-b border-zinc-200 px-3 py-2">Domain</th>
+                  <th className="border-b border-zinc-200 px-3 py-2">Dependency</th>
+                  <th className="border-b border-zinc-200 px-3 py-2">Distance</th>
+                  <th className="border-b border-zinc-200 px-3 py-2">Process</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dependencies.map((dependency, index) => <tr key={`${dependency.source.object_id}-${dependency.target.object_id}-${index}`} className="align-top hover:bg-zinc-50">
+                  <td className="border-b border-zinc-100 px-3 py-2 font-mono text-xs">{qualify(dependency.source)}</td>
+                  <td className="border-b border-zinc-100 px-3 py-2 font-mono text-xs">{qualify(dependency.target)}</td>
+                  <td className="border-b border-zinc-100 px-3 py-2 text-xs">{dependency.target.object_domain}</td>
+                  <td className="border-b border-zinc-100 px-3 py-2 text-xs">{dependency.dependency_type}</td>
+                  <td className="border-b border-zinc-100 px-3 py-2 text-xs">{dependency.distance ?? "--"}</td>
+                  <td className="border-b border-zinc-100 px-3 py-2 text-xs">{processSummary(dependency.process)}</td>
+                </tr>)}
+              </tbody>
+            </table>
+          </div>
+          {diagram && result.object_domain === diagram.toUpperCase() && <SnowflakeDirectedLineageDiagram result={result} level={diagram} />}
+        </>}
   </div>;
+}
+
+function SnowflakeDirectedLineageDiagram({ result, level }: { result: SnowflakeTraceResponse; level: "table" | "column" }) {
+  const { graph, focusNodeId } = useMemo(() => buildSnowflakeGraph(result, level), [result, level]);
+  const isColumn = level === "column";
+
+  return <LineageDiagram
+    graph={graph}
+    direction="TB"
+    verticalFlow="up"
+    collapseDirection="upstream"
+    focusNodeId={focusNodeId}
+    title={isColumn ? "Snowflake column lineage graph" : "Snowflake table lineage"}
+    emptyText={isColumn ? "No Snowflake column dependencies were returned." : "No Snowflake table dependencies were returned."}
+    canvasClassName={isColumn ? "h-[680px] min-h-[520px]" : "h-[840px] min-h-[560px]"}
+    nodeSeparation={20}
+    rankSeparation={44}
+    animatedEdges
+    edgeColor="var(--fabric-primary)"
+  />;
+}
+
+function buildSnowflakeGraph(result: SnowflakeTraceResponse, level: "table" | "column"): { graph: LineageGraph; focusNodeId?: string } {
+  const names = new Map<string, { qualifiedName: string; label: string; detail?: string }>();
+  const pairs: Array<{ source: string; target: string }> = [];
+  const seenPairs = new Set<string>();
+  const isColumn = level === "column";
+
+  const register = (qualifiedName: string, label: string, detail?: string) => {
+    const displayName = qualifiedName.trim();
+    const key = displayName.toUpperCase();
+    if (displayName && !names.has(key)) names.set(key, { qualifiedName: displayName, label: label || displayName, detail });
+    return key;
+  };
+
+  const startingTable = result.starting_object_name.trim();
+  const startingName = result.starting_column_name && isColumn
+    ? `${result.starting_object_name}.${result.starting_column_name}`
+    : result.starting_object_name;
+  const focusKey = register(startingName, startingTable, isColumn ? result.starting_column_name ?? undefined : undefined);
+  result.snapshot.dependencies.forEach((dependency) => {
+    const source = register(referenceName(dependency.source, isColumn), tableName(dependency.source), isColumn ? dependency.source.column_name ?? undefined : undefined);
+    const target = register(referenceName(dependency.target, isColumn), tableName(dependency.target), isColumn ? dependency.target.column_name ?? undefined : undefined);
+    if (!source || !target || source === target) return;
+    const pairKey = `${source}\u0000${target}`;
+    if (seenPairs.has(pairKey)) return;
+    seenPairs.add(pairKey);
+    pairs.push({ source, target });
+  });
+
+  const idByKey = new Map(Array.from(names.keys()).map((key, index) => [key, `snowflake-${level}-${index}`]));
+  const nodes = Array.from(names, ([key, name]) => ({
+    id: idByKey.get(key)!,
+    kind: isColumn ? "column" as const : "table" as const,
+    label: name.label,
+    detail: name.detail,
+    tooltip: name.qualifiedName,
+    isFocal: key === focusKey,
+  }));
+  const edges = pairs.map((pair, index) => ({
+    id: `snowflake-${level}-dependency-${index}`,
+    source: idByKey.get(pair.source)!,
+    target: idByKey.get(pair.target)!,
+  }));
+
+  return { graph: { nodes, edges }, focusNodeId: idByKey.get(focusKey) };
+}
+
+function referenceName(reference: SnowflakeObjectReference, includeColumn: boolean): string {
+  const table = tableName(reference);
+  return includeColumn && reference.column_name ? `${table}.${reference.column_name}` : table;
+}
+
+function tableName(reference: SnowflakeObjectReference): string {
+  const qualifiedName = reference.qualified_name?.trim();
+  if (qualifiedName) return qualifiedName;
+  return [reference.database, reference.schema_name, reference.object_name].filter(Boolean).join(".");
 }
 
 /** A column trace returns column-level references, so the column is part of the name. */
@@ -270,7 +352,7 @@ function SnowflakeTraceError({ error }: { error: unknown }) {
   if (isSessionExpired(error)) {
     return <div className="border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
       <p>No active Snowflake connection. This trace runs against Snowflake directly, so connecting Power BI is not enough.</p>
-      <a href="/workspace/database" className="mt-3 inline-flex h-8 items-center rounded-lg bg-zinc-950 px-3 text-xs font-medium text-white hover:bg-zinc-800">Open database setup</a>
+      <a href="/workspace/database" className="mt-3 inline-flex h-8 items-center rounded-md bg-fabric px-3 text-xs font-medium text-primary-foreground hover:bg-fabric-hover">Open database setup</a>
     </div>;
   }
   const apiError = error instanceof ApiError ? error : null;

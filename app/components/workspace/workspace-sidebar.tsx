@@ -44,7 +44,7 @@ export function WorkspaceSidebar({
 
   return (
     <TooltipProvider delay={200}>
-      <nav aria-label="Workspace navigation" className="flex h-full min-h-0 flex-col bg-[#fafbfc]">
+      <nav aria-label="Workspace navigation" className="flex h-full min-h-0 flex-col bg-sidebar text-sidebar-foreground">
         <div className={cn("min-h-0 flex-1 overflow-y-auto overflow-x-hidden", collapsed ? "p-2" : "p-4")}>
           <div className="mb-5 space-y-1">
             <NavigationItem collapsed={collapsed} active={false} icon={BookOpenCheck} label="Setup guide" meta="Start" onClick={() => onNavigate("setup-guide")} />
@@ -89,7 +89,7 @@ export function WorkspaceSidebar({
 
 function SidebarLabel({ children, collapsed }: { children: string; collapsed: boolean }) {
   if (collapsed) return null;
-  return <div className="mb-2 px-3 text-[11px] font-semibold uppercase text-zinc-400">{children}</div>;
+  return <div className="mb-2 px-3 text-[11px] font-semibold uppercase text-muted-foreground">{children}</div>;
 }
 
 function NavigationItem({
@@ -118,8 +118,8 @@ function NavigationItem({
               aria-label={label}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "flex w-full items-center justify-center rounded-[8px] py-2.5 transition",
-                active ? "bg-zinc-950 text-white" : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950",
+                "flex w-full items-center justify-center rounded-md py-2.5 transition-colors",
+                active ? "bg-sidebar-accent text-fabric" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
               )}
             />
           }
@@ -137,15 +137,15 @@ function NavigationItem({
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex w-full items-center gap-2 rounded-[8px] px-3 py-2.5 text-left text-sm transition",
+        "relative flex w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-sm transition-colors",
         active
-          ? "bg-zinc-950 font-medium text-white"
-          : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950",
+          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-fabric"
+          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
       )}
     >
       <Icon className="size-4 shrink-0" />
       <span className="min-w-0 flex-1 truncate">{label}</span>
-      {meta && <span className={cn("shrink-0 text-[11px]", active ? "text-zinc-300" : "text-zinc-400")}>{meta}</span>}
+      {meta && <span className="shrink-0 text-[11px] text-muted-foreground">{meta}</span>}
     </button>
   );
 }

@@ -60,13 +60,13 @@ export const SEMANTIC_OBJECT_KIND_LABELS: Record<string, string> = {
 };
 
 const explorerTheme = themeQuartz.withParams({
-  accentColor: "#0f766e",
-  backgroundColor: "#ffffff",
-  borderColor: "#e4e4e7",
-  foregroundColor: "#18181b",
-  headerBackgroundColor: "#fafafa",
-  headerTextColor: "#52525b",
-  rowHoverColor: "#f4f4f5",
+  accentColor: "var(--fabric-primary)",
+  backgroundColor: "var(--bg-surface)",
+  borderColor: "var(--border-default)",
+  foregroundColor: "var(--text-primary)",
+  headerBackgroundColor: "var(--bg-subtle)",
+  headerTextColor: "var(--text-secondary)",
+  rowHoverColor: "var(--bg-subtle)",
   wrapperBorder: false,
 });
 

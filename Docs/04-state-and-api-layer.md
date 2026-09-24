@@ -80,7 +80,7 @@ impact, and scanner calls. It also implements:
 the flat DAX dependency response. `computeDependencyClosure` supports upstream,
 downstream, and bidirectional analysis with depth/directness/reference evidence;
 `closureToLineageGraph` converts the closure to the renderer-independent graph
-used by Dagre and React Flow.
+used by ELK and React Flow.
 
 ## Scanner API
 

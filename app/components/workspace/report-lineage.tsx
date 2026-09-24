@@ -95,10 +95,10 @@ export function ReportLineage() {
       }
     : null;
 
-  return <section className="border border-zinc-200 bg-white">
-    <div className="border-b border-zinc-200 px-5 py-5 sm:px-6">
+  return <section className="overflow-hidden rounded-lg border border-border bg-surface">
+    <div className="border-b border-border px-5 py-5 sm:px-6">
       <div className="flex flex-col justify-between gap-5 xl:flex-row xl:items-start">
-        <div className="flex items-start gap-3"><span className="flex size-10 shrink-0 items-center justify-center rounded-[8px] bg-cyan-800 text-white"><GitBranch className="size-5" /></span><div><div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-cyan-800">Cross-workspace analysis</span><Badge className="rounded-[8px] border border-cyan-200 bg-cyan-50 text-cyan-900">Report focused</Badge></div><h1 className="text-lg font-semibold">Report lineage</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">Select any accessible report by name — from any workspace — then work through its pages, source database tables, semantic objects, object mappings, and visual field lineage.</p></div></div>
+        <div className="flex items-start gap-3"><span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-fabric text-primary-foreground"><GitBranch className="size-5" /></span><div><div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-fabric">Cross-workspace analysis</span><Badge className="rounded-md border border-fabric/25 bg-accent text-accent-foreground">Report focused</Badge></div><h1 className="text-lg font-semibold">Report lineage</h1><p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">Select any accessible report by name — from any workspace — then work through its pages, source database tables, semantic objects, object mappings, and visual field lineage.</p></div></div>
         <div className="flex shrink-0 flex-col items-start gap-2 xl:items-end">
           <ReportSelector reports={reportChoices} selectedKey={selectedKey} onChange={setSelectedKey} />
           {selectedReport && (
@@ -134,8 +134,8 @@ function ReportSelector({ reports, selectedKey, onChange }: { reports: ReportCho
   return <div className="w-full space-y-1.5 xl:max-w-md"><label htmlFor="report-lineage-report" className="text-xs font-semibold text-zinc-600">Report</label><select id="report-lineage-report" value={selectedKey} onChange={(event) => onChange(event.target.value)} className="h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-950 outline-none focus:border-cyan-800 focus:ring-2 focus:ring-cyan-100"><option value="" disabled>Select a report</option>{reports.map((report) => <option key={report.key} value={report.key}>{report.report.name} - {report.workspace.name}</option>)}</select>{selected && <p className="break-all text-xs text-zinc-500">Selected report ID: <code className="text-zinc-700">{selected.report.id}</code></p>}</div>;
 }
 
-function LoadingState({ label }: { label: string }) { return <div className={cn("flex min-h-[560px] items-center justify-center gap-2 border border-zinc-200 bg-zinc-50 text-sm text-zinc-600")}><Loader2 className="size-4 animate-spin text-cyan-800" />{label}</div>; }
-function EmptyState({ title, text }: { title: string; text: string }) { return <div className="flex min-h-[560px] items-center justify-center border border-zinc-200 bg-white p-6 text-center"><div><FileBarChart2 className="mx-auto size-8 text-zinc-300" /><h1 className="mt-4 text-lg font-semibold">{title}</h1><p className="mt-2 text-sm text-zinc-500">{text}</p></div></div>; }
+function LoadingState({ label }: { label: string }) { return <div className={cn("flex min-h-[560px] items-center justify-center gap-2 rounded-lg border border-border bg-subtle text-sm text-muted-foreground")}><Loader2 className="size-4 animate-spin text-fabric" />{label}</div>; }
+function EmptyState({ title, text }: { title: string; text: string }) { return <div className="flex min-h-[560px] items-center justify-center rounded-lg border border-border bg-surface p-6 text-center"><div><FileBarChart2 className="mx-auto size-8 text-muted-foreground" /><h1 className="mt-4 text-lg font-semibold">{title}</h1><p className="mt-2 text-sm text-muted-foreground">{text}</p></div></div>; }
 
 /**
  * Resolves every discovered report to its bound model, preferring the estate

@@ -74,8 +74,9 @@ non-file/non-directory routes to `/index.html`.
 ## Lazy Feature Boundary
 
 Explorer, Report Lineage, Table Impact, Measure Impact, and Scanner are loaded
-with `React.lazy` and a common Suspense fallback. This keeps AG Grid, XYFlow,
-and Dagre out of setup/API-documentation route chunks. Because React Router's
+with `React.lazy` and a common Suspense fallback. This keeps AG Grid and XYFlow
+out of setup/API-documentation route chunks; ELK is additionally loaded only
+when a graph needs layout and runs in a Web Worker. Because React Router's
 virtual entry can discover lazy dependencies in later waves, `vite.config.ts`
 prebundles the complete runtime bare-import set. This prevents a new optimizer
 generation from invalidating modules already requested by the browser during
@@ -85,7 +86,7 @@ the first analysis navigation.
 
 Feature components build a renderer-independent `LineageGraph` from
 `lineage-types.ts`. `dependency-graph.ts` computes upstream/downstream DAX
-closures; `lineage-layout.ts` places visible nodes with Dagre;
+closures; `lineage-layout.ts` places visible nodes with ELK;
 `lineage-node.tsx` renders collapsible object nodes; and
 `lineage-diagram.tsx` owns visibility state plus React Flow rendering. This
 keeps traversal and layout rules consistent across Explorer, Report Lineage,

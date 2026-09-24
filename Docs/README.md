@@ -20,8 +20,8 @@ handbook.
   Tailwind CSS 4, and shadcn/Base UI.
 - State: TanStack Query for server state; in-memory Zustand for API origin and
   the optional ephemeral administrative key.
-- Evidence UI: AG Grid for copyable/exportable tables; React Flow plus Dagre
-  for directed, collapsible lineage diagrams.
+- Evidence UI: AG Grid for copyable/exportable tables; React Flow plus ELK
+  for directed, draggable, collapsible lineage diagrams.
 - Backend: separate sibling FastAPI repository, reached through `/api/v1/*`
   and `/openapi.json` using backend-managed HTTP-only sessions.
 - API model: live runtime OpenAPI parsing; Orval is installed but no generated

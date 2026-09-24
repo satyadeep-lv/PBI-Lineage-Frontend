@@ -71,19 +71,19 @@ export function Scanner() {
   if (workspacesQuery.isError) return <PowerBiAuthRequired returnTo="Scanner" />;
   if (!workspaces.length) return <EmptyState title="No Power BI workspaces found" text="The authenticated account did not return any workspaces to explore." />;
 
-  return <section className="border border-zinc-200 bg-white">
-    <div className="border-b border-zinc-200 px-5 py-5 sm:px-6">
+  return <section className="overflow-hidden rounded-lg border border-border bg-surface">
+    <div className="border-b border-border px-5 py-5 sm:px-6">
       <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-[8px] bg-teal-700 text-white"><Radar className="size-5" /></span>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-fabric text-primary-foreground"><Radar className="size-5" /></span>
         <div>
-          <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-teal-700">Power BI</span><Badge className="rounded-[8px] border border-teal-200 bg-teal-50 text-teal-800">Scanner</Badge></div>
+          <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-fabric">Power BI</span><Badge className="rounded-md border border-fabric/25 bg-accent text-accent-foreground">Scanner</Badge></div>
           <h1 className="text-lg font-semibold">Scanner</h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">Run the Power BI Admin metadata scanner across one or more workspaces, then browse every data point it returns — workspaces, reports, dashboards, semantic models, dependencies, and datasource instances. Subject to the tenant's hourly scan limits — select only the workspaces you need.</p>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">Run the Power BI Admin metadata scanner across one or more workspaces, then browse every data point it returns — workspaces, reports, dashboards, semantic models, dependencies, and datasource instances. Subject to the tenant's hourly scan limits — select only the workspaces you need.</p>
         </div>
       </div>
     </div>
 
-    <div className="space-y-4 border-b border-zinc-200 bg-[#fafbfc] px-5 py-4 sm:px-6">
+    <div className="space-y-4 border-b border-border bg-subtle px-5 py-4 sm:px-6">
       <div className="grid gap-4 md:grid-cols-2">
         <WorkspaceScopeSelect id="scanner-scope" label="Workspaces to scan" workspaces={workspaces} selectedIds={selectedWorkspaceIds} onChange={setSelectedWorkspaceIds} />
         <div className="space-y-1.5">
@@ -130,9 +130,9 @@ export function Scanner() {
           <SummaryStat label="Misconfigured sources" value={result.summary.misconfigured_datasource_instance_count} warnOnValue />
         </div>
 
-        <div className="overflow-x-auto border-b border-zinc-200 bg-[#fafbfc]">
+        <div className="overflow-x-auto border-b border-border bg-subtle">
           <div className="flex min-w-max" role="tablist" aria-label="Scanner data categories">
-            {SCANNER_TABS.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} className={cn("border-b-2 px-4 py-3 text-left text-sm transition", activeTab === tab.id ? "border-teal-700 font-semibold text-teal-800" : "border-transparent text-zinc-500 hover:text-zinc-950")}>{tab.label}</button>)}
+            {SCANNER_TABS.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} className={cn("border-b-2 px-4 py-3 text-left text-sm transition-colors", activeTab === tab.id ? "border-fabric font-semibold text-fabric" : "border-transparent text-muted-foreground hover:text-foreground")}>{tab.label}</button>)}
           </div>
         </div>
 
@@ -655,5 +655,5 @@ function LoadingState({ label }: { label: string }) {
 }
 
 function EmptyState({ title, text }: { title: string; text: string }) {
-  return <div className="border border-zinc-200 bg-white p-10 text-center"><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-sm text-zinc-500">{text}</p></div>;
+  return <div className="rounded-md border border-border bg-surface p-10 text-center"><p className="text-sm font-semibold">{title}</p><p className="mt-1 text-sm text-muted-foreground">{text}</p></div>;
 }

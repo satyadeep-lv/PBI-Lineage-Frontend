@@ -127,13 +127,13 @@ export function Explorer() {
   if (!workspaces.length) return <ExplorerEmpty title="No Power BI workspaces found" text="The authenticated account did not return any workspaces to explore." />;
 
   return (
-    <section className="border border-zinc-200 bg-white">
-      <div className="border-b border-zinc-200 px-5 py-5 sm:px-6">
+    <section className="overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="border-b border-border px-5 py-5 sm:px-6">
         <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-start">
           <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-[8px] bg-teal-700 text-white"><Network className="size-5" /></span>
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-fabric text-primary-foreground"><Network className="size-5" /></span>
             <div>
-              <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-teal-700">Power BI</span><Badge className="rounded-[8px] border border-teal-200 bg-teal-50 text-teal-800">Name-based explorer</Badge></div>
+              <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-fabric">Power BI</span><Badge className="rounded-md border border-fabric/25 bg-accent text-accent-foreground">Name-based explorer</Badge></div>
               <h1 className="text-lg font-semibold">Explorer</h1>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">Choose a workspace, review its assets, then pick a report to see its pages, source database tables, semantic objects, and visual field lineage.</p>
             </div>
@@ -147,9 +147,9 @@ export function Explorer() {
       </div>
 
       <ExplorerGuidance />
-      <div className="overflow-x-auto border-b border-zinc-200 bg-[#fafbfc]">
+      <div className="overflow-x-auto border-b border-border bg-subtle">
         <div className="flex min-w-max px-4 sm:px-6" role="tablist" aria-label="Explorer sections">
-          {tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} className={cn("border-b-2 px-4 py-3 text-left text-sm transition", activeTab === tab.id ? "border-teal-700 font-semibold text-teal-800" : "border-transparent text-zinc-500 hover:text-zinc-950")} title={tab.label}>{tab.shortLabel}</button>)}
+          {tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={activeTab === tab.id} onClick={() => setActiveTab(tab.id)} className={cn("border-b-2 px-4 py-3 text-left text-sm transition-colors", activeTab === tab.id ? "border-fabric font-semibold text-fabric" : "border-transparent text-muted-foreground hover:text-foreground")} title={tab.label}>{tab.shortLabel}</button>)}
         </div>
       </div>
 
@@ -173,11 +173,11 @@ export function Explorer() {
 }
 
 function ExplorerGuidance() {
-  return <div className="grid border-b border-zinc-200 bg-zinc-50 md:grid-cols-3"><GuidanceStep number="1" title="Choose the business name" text="Start with the workspace and report people recognize." /><GuidanceStep number="2" title="Pick the report" text="Everything in the Reports tab is scoped to the report selected there." /><GuidanceStep number="3" title="Trace the evidence" text="Work through page details, source DB lineage, semantic objects, and report visuals." /></div>;
+  return <div className="grid border-b border-border bg-subtle md:grid-cols-3"><GuidanceStep number="1" title="Choose business context" text="Start with the workspace and report people recognize." /><GuidanceStep number="2" title="Pick a report" text="Everything in the Reports tab is scoped to the report selected there." /><GuidanceStep number="3" title="Trace evidence" text="Work through page details, source DB lineage, semantic objects, and report visuals." /></div>;
 }
 
 function GuidanceStep({ number, title, text }: { number: string; title: string; text: string }) {
-  return <div className="flex gap-3 border-b border-zinc-200 px-5 py-4 last:border-b-0 md:border-b-0 md:border-r md:px-6 md:last:border-r-0"><span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-semibold text-white">{number}</span><div><p className="text-sm font-semibold">{title}</p><p className="mt-0.5 text-xs leading-5 text-zinc-500">{text}</p></div></div>;
+  return <div className="flex gap-3 border-b border-border px-5 py-4 last:border-b-0 md:border-b-0 md:border-r md:px-6 md:last:border-r-0"><span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-fabric text-xs font-semibold text-primary-foreground">{number}</span><div><p className="text-sm font-semibold">{title}</p><p className="mt-0.5 text-xs leading-5 text-muted-foreground">{text}</p></div></div>;
 }
 
 function AssetsAccessTab({ workspace, reports, semanticModels, isLoading, error, scan, onReportSelect, onSemanticModelSelect }: {

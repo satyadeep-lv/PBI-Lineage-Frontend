@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("home presents a focused overview with one primary action", async ({ page }) => {
+test("home presents a focused product overview with clear primary and setup actions", async ({ page }) => {
   const browserErrors: string[] = [];
   const healthRequests: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.message));
@@ -12,8 +12,9 @@ test("home presents a focused overview with one primary action", async ({ page }
 
   await expect(page).toHaveTitle("PBI Lineage Explorer");
   await expect(page.getByRole("heading", { level: 1, name: "PBI Lineage Explorer" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
-  await expect(page.locator("main a")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Start exploring", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Setup guide", exact: true })).toBeVisible();
+  await expect(page.locator("main a")).toHaveCount(2);
   await expect(page.locator("main")).not.toContainText(/Snowflake/i);
 
   const primaryNavigation = page.getByRole("navigation", { name: "Primary navigation" });
@@ -40,7 +41,7 @@ test("home navigation and content remain usable on mobile", async ({ page }) => 
   await page.goto("/");
 
   await expect(page.getByRole("heading", { level: 1, name: "PBI Lineage Explorer" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start exploring", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open navigation menu" })).toBeVisible();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);

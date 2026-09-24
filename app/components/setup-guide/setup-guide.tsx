@@ -76,8 +76,8 @@ npm.cmd run dev`;
 
 export function SetupGuide() {
   return (
-    <main className="flex-1 bg-[#e7f2f3]">
-      <section className="border-b border-zinc-200 bg-white">
+    <main className="power-ai-aware flex-1 bg-app">
+      <section className="border-b border-border bg-surface">
         <div className="mx-auto max-w-screen-2xl px-4 py-10 sm:px-6 sm:py-12 lg:px-8">
           <div className="max-w-4xl">
             <Badge className="rounded-[8px] border border-cyan-200 bg-cyan-50 text-cyan-900">
@@ -111,16 +111,16 @@ export function SetupGuide() {
 
       <div className="mx-auto grid max-w-screen-2xl gap-8 px-4 py-8 sm:px-6 lg:grid-cols-[240px_minmax(0,1fr)] lg:px-8 lg:py-10">
         <aside className="hidden lg:block">
-          <nav aria-label="Setup guide sections" className="sticky top-6 border-l border-zinc-200 pl-4">
-            <p className="mb-3 text-xs font-semibold uppercase text-zinc-400">On this page</p>
+          <nav aria-label="Setup guide sections" className="sticky top-20 border-l border-border pl-4">
+            <p className="mb-3 text-xs font-semibold uppercase text-muted-foreground">On this page</p>
             <ol className="space-y-1">
               {guideSections.map((section) => (
                 <li key={section.id}>
                   <a
                     href={`#${section.id}`}
-                    className="flex items-center gap-3 rounded-[6px] px-2 py-2 text-sm text-zinc-600 hover:bg-white hover:text-zinc-950"
+                    className="flex items-center gap-3 rounded-md px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-surface hover:text-foreground"
                   >
-                    <span className="font-mono text-[11px] text-zinc-400">{section.number}</span>
+                    <span className="font-mono text-[11px] text-fabric">{section.number}</span>
                     <span>{section.label}</span>
                   </a>
                 </li>
@@ -130,10 +130,10 @@ export function SetupGuide() {
         </aside>
 
         <article className="min-w-0 space-y-8">
-          <nav aria-label="Setup guide sections on small screens" className="overflow-x-auto border-b border-zinc-200 pb-3 lg:hidden">
+          <nav aria-label="Setup guide sections on small screens" className="overflow-x-auto border-b border-border pb-3 lg:hidden">
             <div className="flex min-w-max gap-2">
               {guideSections.map((section) => (
-                <a key={section.id} href={`#${section.id}`} className="border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700">
+                <a key={section.id} href={`#${section.id}`} className="rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground">
                   {section.number} {section.label}
                 </a>
               ))}
@@ -545,7 +545,7 @@ export function SetupGuide() {
 function ReadinessItem({ icon: Icon, title, text }: { icon: LucideIcon; title: string; text: string }) {
   return (
     <div className="flex gap-3 border-b border-zinc-200 px-3 py-5 last:border-b-0 sm:border-b-0 sm:border-r sm:px-5 sm:first:pl-0 sm:last:border-r-0">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-[8px] bg-zinc-950 text-white"><Icon className="size-4" /></span>
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-fabric text-primary-foreground"><Icon className="size-4" /></span>
       <span>
         <span className="block text-sm font-semibold text-zinc-950">{title}</span>
         <span className="mt-1 block text-xs leading-5 text-zinc-500">{text}</span>
@@ -559,9 +559,9 @@ function GuideSection({ id, number, icon: Icon, title, description, children }: 
     <section id={id} className="scroll-mt-6 border border-zinc-200 bg-white">
       <header className="border-b border-zinc-200 px-4 py-5 sm:px-6">
         <div className="flex items-start gap-4">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-[8px] bg-zinc-950 text-white"><Icon className="size-5" /></span>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-fabric text-primary-foreground"><Icon className="size-5" /></span>
           <div className="min-w-0">
-            <p className="font-mono text-xs text-cyan-700">STEP {number}</p>
+            <p className="font-mono text-xs text-fabric">STEP {number}</p>
             <h2 className="mt-1 text-xl font-semibold tracking-normal text-zinc-950 sm:text-2xl">{title}</h2>
             <p className="mt-2 max-w-4xl text-sm leading-6 text-zinc-600">{description}</p>
           </div>
@@ -656,7 +656,7 @@ function Bullet({ children }: { children: ReactNode }) {
 
 function MethodPanel({ title, badge, text }: { title: string; badge: string; text: string }) {
   return (
-    <div className="border-l-2 border-zinc-950 bg-zinc-50 px-4 py-4">
+    <div className="border-l-2 border-fabric bg-subtle px-4 py-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-sm font-semibold text-zinc-950">{title}</h4>
         <Badge className="rounded-[6px] border border-zinc-200 bg-white text-zinc-600">{badge}</Badge>

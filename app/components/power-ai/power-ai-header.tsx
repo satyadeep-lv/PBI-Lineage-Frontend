@@ -1,22 +1,32 @@
-import { ChevronsRight, Maximize2, Minimize2, RotateCcw, Sparkles } from "lucide-react";
+import { ChevronsRight, Circle, Loader2, Maximize2, Minimize2, RotateCcw, Sparkles } from "lucide-react";
 
+import { isUnlocked } from "~/lib/power-ai-api";
+import { usePowerAiStatus } from "~/lib/use-power-ai-status";
 import { usePowerAiStore } from "~/stores/power-ai-store";
 
-const ICON_BUTTON = "flex size-7 items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600";
+const ICON_BUTTON = "flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function PowerAiHeader({ onCollapse }: { onCollapse?: () => void }) {
   const hasMessages = usePowerAiStore((state) => state.messages.length > 0);
   const resetConversation = usePowerAiStore((state) => state.resetConversation);
   const expanded = usePowerAiStore((state) => state.expanded);
   const setExpanded = usePowerAiStore((state) => state.setExpanded);
+  const statusQuery = usePowerAiStatus();
+  const available = isUnlocked(statusQuery.data);
 
   return (
-    <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-4 py-3">
+    <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
       <div className="flex min-w-0 items-center gap-2">
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-[8px] bg-teal-700 text-white">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-fabric text-primary-foreground">
           <Sparkles className="size-4" />
         </span>
-        <h2 className="min-w-0 truncate text-sm font-semibold text-zinc-950">Power AI</h2>
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold text-foreground">Power AI</h2>
+          <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            {statusQuery.isLoading ? <Loader2 className="size-2.5 animate-spin" /> : <Circle className={available ? "size-2.5 fill-success text-success" : "size-2.5 fill-muted-foreground text-muted-foreground"} />}
+            {statusQuery.isLoading ? "Checking" : available ? "Available" : "Unavailable"}
+          </p>
+        </div>
       </div>
       <div className="flex shrink-0 items-center gap-1">
         {hasMessages && (
@@ -28,7 +38,7 @@ export function PowerAiHeader({ onCollapse }: { onCollapse?: () => void }) {
           type="button"
           onClick={() => setExpanded(!expanded)}
           aria-pressed={expanded}
-          aria-label="Widen Power AI"
+          aria-label={expanded ? "Narrow Power AI" : "Widen Power AI"}
           title={expanded ? "Narrow Power AI" : "Widen Power AI for long answers"}
           className={ICON_BUTTON}
         >

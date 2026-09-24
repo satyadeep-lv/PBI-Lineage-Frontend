@@ -9,7 +9,6 @@ import {
   DetailItem,
   EvidenceError,
   EvidenceOptionToggle,
-  ExplorerError,
   ExplorerGrid,
   ExplorerLoading,
   ExplorerWarnings,
@@ -24,7 +23,7 @@ import {
   type Report,
   type Workspace,
 } from "~/components/workspace/evidence-ui";
-import { parsedSemanticModelKey, requestJson } from "~/lib/lineage-api";
+import { requestJson } from "~/lib/lineage-api";
 import { cn } from "~/lib/utils";
 import { useAppStore } from "~/stores/app-store";
 
@@ -59,40 +58,6 @@ export type ReportBinding = {
 type ReportPage = { name: string; display_name: string; order: number };
 type ReportPagesResponse = { pages: ReportPage[] };
 
-type ParsedColumn = {
-  name: string;
-  source_path?: string | null;
-  source_column?: string | null;
-  data_type?: string | null;
-  expression?: string | null;
-  is_hidden?: boolean | null;
-};
-
-type ParsedTable = {
-  name: string;
-  source_path?: string | null;
-  expression?: string | null;
-  columns: ParsedColumn[];
-  measures: Array<{ name: string; expression?: string | null; is_hidden?: boolean | null }>;
-  hierarchies: Array<{ name: string; levels: Array<{ name: string; column?: string | null }> }>;
-};
-
-type ParsedSemanticModel = {
-  workspace_id: string;
-  semantic_model_id: string;
-  format?: string | null;
-  tables: ParsedTable[];
-  relationships: Array<{
-    name?: string | null;
-    from_table?: string | null;
-    from_column?: string | null;
-    to_table?: string | null;
-    to_column?: string | null;
-    is_active?: boolean | null;
-  }>;
-  warnings: Array<{ code: string; message: string }>;
-};
-
 type NormalizedReport = {
   semantic_model?: { semantic_model_id?: string | null; path?: string | null } | null;
   page_count: number;
@@ -101,20 +66,38 @@ type NormalizedReport = {
   warnings: string[];
 };
 
-type ReportSemanticLineage = {
+type ReportVisualSourceColumnRow = {
+  page_name: string;
+  page_id?: string | null;
+  visual_id?: string | null;
+  visual_title?: string | null;
+  visual_type?: string | null;
+  field_role?: string | null;
+  semantic_table?: string | null;
+  semantic_object_name?: string | null;
+  semantic_object_type?: "column" | "measure" | "calculated_column" | null;
+  dax_expression?: string | null;
+  source_columns: string[];
+  source_tables: string[];
+  via_workspace_name?: string | null;
+  resolution_status: "resolved" | "partial" | "unresolved";
+  resolution_note?: string | null;
+};
+
+type ReportVisualSourceColumnsResponse = {
+  workspace_id: string;
+  workspace_name: string;
+  report_id: string;
+  report_name: string;
+  semantic_model_id?: string | null;
+  semantic_model_name?: string | null;
+  semantic_model_workspace_id?: string | null;
+  rows: ReportVisualSourceColumnRow[];
   total_field_reference_count: number;
-  matched_field_reference_count: number;
-  unmatched_field_reference_count: number;
-  field_matches: Array<{
-    page_display_name: string;
-    visual_title?: string | null;
-    visual_type?: string | null;
-    status: "matched" | "unmatched";
-    semantic_object?: { object_type: string; table_name: string; object_name: string } | null;
-    reason?: string | null;
-    match_confidence: number;
-  }>;
-  warnings: string[];
+  resolved_count: number;
+  partial_count: number;
+  unresolved_count: number;
+  warnings: ExplorerEvidenceWarning[];
 };
 
 type ReportSourceTableRow = {
@@ -245,18 +228,13 @@ export function ReportEvidence({ binding, modelNames, activeSection, onSectionCh
     queryFn: () => requestJson<NormalizedReport>(apiOrigin, `/api/v1/workspaces/${workspaceId}/reports/${reportId}/definition/normalized?format=PBIR`, { method: "POST" }),
     enabled: activeSection === "report-semantic",
   });
-  const reportSemanticLineageQuery = useQuery({
-    queryKey: ["explorer", "report-semantic-lineage", apiOrigin, workspaceId, reportId, boundModelId, boundModelWorkspaceId],
-    queryFn: () => {
-      const query = new URLSearchParams({ semantic_model_id: boundModelId!, semantic_model_workspace_id: boundModelWorkspaceId });
-      return requestJson<ReportSemanticLineage>(apiOrigin, `/api/v1/workspaces/${workspaceId}/reports/${reportId}/semantic-lineage?${query.toString()}`, { method: "POST" });
-    },
-    enabled: Boolean(boundModelId) && activeSection === "report-semantic",
-  });
-  const parsedSemanticModelQuery = useQuery({
-    queryKey: parsedSemanticModelKey(apiOrigin, boundModelWorkspaceId, boundModelId ?? ""),
-    queryFn: () => requestJson<ParsedSemanticModel>(apiOrigin, `/api/v1/workspaces/${boundModelWorkspaceId}/semantic-models/${boundModelId}/definition/parsed?format=TMDL`, { method: "POST" }),
-    enabled: Boolean(boundModelId) && activeSection === "report-semantic",
+  const reportVisualSourceColumnsQuery = useQuery({
+    queryKey: ["explorer", "report-visual-source-columns", apiOrigin, workspaceId, reportId],
+    queryFn: () => requestJson<ReportVisualSourceColumnsResponse>(apiOrigin, "/api/v1/explorer/report-visual-source-columns", {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: workspaceId, report_id: reportId, include_gateway_sources: false }),
+    }),
+    enabled: activeSection === "report-semantic",
   });
   const semanticMetadataQuery = useQuery({
     queryKey: ["explorer", "semantic-metadata", apiOrigin, boundModelWorkspaceId, boundModelId],
@@ -289,7 +267,7 @@ export function ReportEvidence({ binding, modelNames, activeSection, onSectionCh
     {activeSection === "source-db-lineage" && <SourceDbLineageTab workspace={workspace} selectedReport={report} query={reportSourceTablesQuery} gatewaySourcesEnabled={gatewaySourcesEnabled} onGatewaySourcesChange={setGatewaySourcesEnabled} />}
     {activeSection === "semantic-objects" && <SemanticObjectsTab workspace={workspace} selectedReport={report} reportSemanticModel={boundModel} modelNames={modelNames} query={semanticModelObjectsQuery} metadataQuery={semanticMetadataQuery} />}
     {activeSection === "semantic-db-mapping" && <SemanticDbMappingTab workspace={workspace} selectedReport={report} semanticModelId={boundModelId} semanticModelName={boundModelName} semanticModelWorkspaceId={boundModelWorkspaceId} query={explorerSnapshotQuery} gatewaySourcesEnabled={gatewaySourcesEnabled} onGatewaySourcesChange={setGatewaySourcesEnabled} />}
-    {activeSection === "report-semantic" && <ReportSemanticTab workspace={workspace} selectedReport={report} reportSemanticModel={boundModel} boundModelId={boundModelId} normalizedQuery={normalizedReportQuery} lineageQuery={reportSemanticLineageQuery} parsed={parsedSemanticModelQuery.data} />}
+    {activeSection === "report-semantic" && <ReportSemanticTab workspace={workspace} selectedReport={report} reportSemanticModel={boundModel} normalizedQuery={normalizedReportQuery} visualSourcesQuery={reportVisualSourceColumnsQuery} />}
   </>;
 }
 
@@ -534,29 +512,52 @@ function SemanticDbMappingTab({ workspace, selectedReport, semanticModelId, sema
   </div>;
 }
 
-function ReportSemanticTab({ workspace, selectedReport, reportSemanticModel, boundModelId, normalizedQuery, lineageQuery, parsed }: {
+function ReportSemanticTab({ workspace, selectedReport, reportSemanticModel, normalizedQuery, visualSourcesQuery }: {
   workspace: Workspace | null;
   selectedReport: Report | null;
   reportSemanticModel: { id: string; name: string } | null;
-  boundModelId: string | null;
   normalizedQuery: UseQueryResult<NormalizedReport, Error>;
-  lineageQuery: UseQueryResult<ReportSemanticLineage, Error>;
-  parsed: ParsedSemanticModel | undefined;
+  visualSourcesQuery: UseQueryResult<ReportVisualSourceColumnsResponse, Error>;
 }) {
-  const expressionIndex = useMemo(() => buildExpressionIndex(parsed), [parsed]);
-  const fieldRows: ExplorerGridRow[] = (lineageQuery.data?.field_matches ?? []).map((match, index) => {
-    const object = match.semantic_object;
-    return { id: `${match.page_display_name}-${match.visual_title ?? index}-${index}`, page: match.page_display_name, visual: match.visual_title ?? match.visual_type ?? "Untitled visual", semanticTable: object?.table_name ?? "Unresolved", semanticObject: object?.object_name ?? "Unresolved", type: object?.object_type ?? "--", daxExpression: object ? expressionIndex.get(objectKey(object.table_name, object.object_name)) ?? "No DAX expression declared" : "No semantic object resolved" };
+  const result = visualSourcesQuery.data;
+  const fieldRows: ExplorerGridRow[] = (result?.rows ?? []).map((row, index) => {
+    return {
+      id: `${row.page_id ?? row.page_name}-${row.visual_id ?? row.visual_title ?? index}-${row.field_role ?? "field"}-${row.semantic_table ?? "unresolved"}-${row.semantic_object_name ?? index}`,
+      page: row.page_name,
+      visual: row.visual_title ?? row.visual_type ?? "Untitled visual",
+      semanticTable: row.semantic_table ?? "Unresolved",
+      semanticObject: row.semantic_object_name ?? "Unresolved",
+      type: row.semantic_object_type ?? "--",
+      daxExpression: row.dax_expression ?? (row.semantic_object_name ? "No DAX expression declared" : "No semantic object resolved"),
+      sourceColumn: joinPhysicalSources(row.source_columns),
+      sourceTable: joinPhysicalSources(row.source_tables),
+    };
   });
+  const semanticModel = result?.semantic_model_id && result.semantic_model_name
+    ? { id: result.semantic_model_id, name: result.semantic_model_name }
+    : reportSemanticModel;
+  const exportContext = makeExportContext(workspace, selectedReport, semanticModel);
+  if (result) {
+    exportContext.parent_workspace_name = result.workspace_name;
+    exportContext.parent_workspace_id = result.workspace_id;
+    exportContext.parent_report_name = result.report_name;
+    exportContext.parent_report_id = result.report_id;
+    if (result.semantic_model_name) exportContext.parent_semantic_model_name = result.semantic_model_name;
+    if (result.semantic_model_id) exportContext.parent_semantic_model_id = result.semantic_model_id;
+  }
+
   return <div className="space-y-6">
-    <SectionHeading icon={<BookOpenCheck className="size-5" />} title="Report visual lineage" text="This matches fields used in a report's visuals to the linked semantic model, including the DAX expression when that object is calculated." />
-    {!reportSemanticModel && boundModelId && <div className="border border-sky-200 bg-sky-50 p-4 text-sm leading-6 text-sky-950">This report's semantic model could not be named from the workspace it was selected in{selectedReport?.dataset_workspace_id ? `; Power BI reports it lives in workspace ${selectedReport.dataset_workspace_id}` : ""}. Field lineage is still requested against the report's bound model.</div>}
-    {!boundModelId && <ExplorerError text="This report did not return a bound semantic model, so no field lineage can be requested for it." />}
-    {reportSemanticModel && <div className="border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">Linked semantic model: <strong>{reportSemanticModel.name}</strong></div>}
-    {normalizedQuery.isLoading || lineageQuery.isLoading ? <ExplorerLoading label="Reading report definition and semantic field matches" /> : null}
-    {normalizedQuery.isError || lineageQuery.isError ? <EvidenceError error={normalizedQuery.error ?? lineageQuery.error} fallback="Report semantic lineage needs both Power BI and Fabric permissions for the selected report and model." /> : null}
+    <SectionHeading icon={<BookOpenCheck className="size-5" />} title="Report visual lineage" text="Each visual field is matched to its semantic object and traced through DAX to the physical database columns and tables it reads." />
+    {semanticModel && <div className="border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950">Linked semantic model: <strong>{semanticModel.name}</strong></div>}
+    {normalizedQuery.isLoading || visualSourcesQuery.isLoading ? <ExplorerLoading label="Tracing report visual fields to physical sources" /> : null}
+    {normalizedQuery.isError ? <EvidenceError error={normalizedQuery.error} fallback="The normalized report definition is unavailable." /> : null}
+    {visualSourcesQuery.isError ? <EvidenceError error={visualSourcesQuery.error} fallback="Report visual source columns require access to the report and its bound semantic model." /> : null}
     {normalizedQuery.data && <div className="grid border-y border-zinc-200 sm:grid-cols-3"><DetailItem label="Pages" value={String(normalizedQuery.data.page_count)} /><DetailItem label="Visuals" value={String(normalizedQuery.data.visual_count)} /><DetailItem label="Definition parts" value={String(normalizedQuery.data.source_part_count)} /></div>}
-    {lineageQuery.data && <><div className="grid border-y border-zinc-200 sm:grid-cols-3"><DetailItem label="Field references" value={String(lineageQuery.data.total_field_reference_count)} /><DetailItem label="Matched" value={String(lineageQuery.data.matched_field_reference_count)} /><DetailItem label="Needs review" value={String(lineageQuery.data.unmatched_field_reference_count)} /></div><ExplorerGrid rowData={fieldRows} columnDefs={[{ field: "page", headerName: "Report page", minWidth: 180 }, { field: "visual", headerName: "Visual", minWidth: 190, flex: 1 }, { field: "semanticTable", headerName: "Semantic table", minWidth: 180 }, { field: "semanticObject", headerName: "Semantic object", minWidth: 180 }, { field: "type", headerName: "Type", minWidth: 120 }, daxColumn()]} emptyMessage="No visual field references were returned." exportFileName={`${filePart(selectedReport?.name)}-report-semantic`} exportContext={makeExportContext(workspace, selectedReport, reportSemanticModel)} /></>}
+    {result && <>
+      <ExplorerWarnings warnings={result.warnings} />
+      <div className="grid border-y border-zinc-200 sm:grid-cols-4"><DetailItem label="Field references" value={String(result.total_field_reference_count)} /><DetailItem label="Resolved" value={String(result.resolved_count)} /><DetailItem label="Partial" value={String(result.partial_count)} /><DetailItem label="Unresolved" value={String(result.unresolved_count)} /></div>
+      <ExplorerGrid rowData={fieldRows} columnDefs={[{ field: "page", headerName: "Report page", minWidth: 180 }, { field: "visual", headerName: "Visual", minWidth: 190, flex: 1 }, { field: "semanticTable", headerName: "Semantic table", minWidth: 180 }, { field: "semanticObject", headerName: "Semantic object", minWidth: 180 }, { field: "type", headerName: "Type", minWidth: 120 }, daxColumn(), { field: "sourceColumn", headerName: "sourceColumn", minWidth: 220 }, { field: "sourceTable", headerName: "sourceTable", minWidth: 280, flex: 1 }]} emptyMessage="No visual field references were returned." exportFileName={`${filePart(selectedReport?.name)}-report-semantic`} exportContext={exportContext} />
+    </>}
   </div>;
 }
 
@@ -678,12 +679,6 @@ function absentSourceValue(objectType: string): string {
   return "Not reported";
 }
 
-function buildExpressionIndex(parsed: ParsedSemanticModel | undefined) {
-  const index = new Map<string, string>();
-  parsed?.tables.forEach((table) => {
-    if (table.expression) index.set(objectKey(table.name, table.name), table.expression);
-    table.columns.forEach((column) => { if (column.expression) index.set(objectKey(table.name, column.name), column.expression); });
-    table.measures.forEach((measure) => { if (measure.expression) index.set(objectKey(table.name, measure.name), measure.expression); });
-  });
-  return index;
+function joinPhysicalSources(values: string[]) {
+  return values.length ? values.join(", ") : "Not resolved";
 }

@@ -36,7 +36,7 @@ export function ConversationView() {
       {shown.map((message) =>
         message.role === "user" ? (
           <div key={message.id} className="flex justify-end">
-            <div className="max-w-[88%] rounded-lg bg-zinc-950 px-3 py-2 text-sm leading-6 text-white">
+            <div className="max-w-[88%] rounded-lg bg-fabric px-3 py-2 text-sm leading-6 text-primary-foreground">
               <p className="whitespace-pre-wrap">{message.text}</p>
             </div>
           </div>
@@ -55,7 +55,7 @@ export function ConversationView() {
       {error && <AiErrorBanner message={error} />}
 
       {!messages.length && !error && (
-        <div className="flex h-full flex-col items-center justify-center py-10 text-center text-zinc-400">
+        <div className="flex h-full flex-col items-center justify-center py-10 text-center text-muted-foreground">
           <Sparkles className="size-6" />
           <p className="mt-2 max-w-[220px] text-xs leading-5">Ask Power AI about anything you're viewing here.</p>
         </div>

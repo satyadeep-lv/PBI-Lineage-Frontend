@@ -9,7 +9,7 @@ export function PowerBiAuthRequired({ returnTo }: { returnTo: string }) {
       <AlertCircle className="mx-auto size-8 text-amber-500" />
       <h1 className="mt-4 text-lg font-semibold">Power BI authentication is required</h1>
       <p className="mt-2 text-sm leading-6 text-zinc-500">Complete Power BI setup with device code or a service principal, then return to {returnTo}.</p>
-      <a href="/workspace/power-bi" className="mt-5 inline-flex h-8 items-center rounded-lg bg-zinc-950 px-3 text-sm font-medium text-white hover:bg-zinc-800">Open Power BI setup</a>
+      <a href="/workspace/power-bi" className="mt-5 inline-flex h-9 items-center rounded-md bg-fabric px-3 text-sm font-medium text-primary-foreground hover:bg-fabric-hover">Open Power BI setup</a>
     </div>
   </section>;
 }

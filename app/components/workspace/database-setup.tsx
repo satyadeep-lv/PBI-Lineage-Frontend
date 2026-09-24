@@ -90,14 +90,14 @@ export function DatabaseSetup({
   const credentialLabel = authenticationMethod === "key_pair" ? "Private key PEM" : authenticationMethod === "oauth" ? "OAuth token" : "Password";
 
   return (
-    <section className="overflow-hidden border border-zinc-200 bg-white">
-      <div className="border-b border-zinc-200 px-5 py-4 sm:px-6">
+    <section className="overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="border-b border-border px-5 py-4 sm:px-6">
         <div className="flex items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-[8px] bg-emerald-700 text-white"><Database className="size-5" /></span>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-fabric-secondary text-white"><Database className="size-5" /></span>
           <div>
-            <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-emerald-700">Step 2 of 2</span>{connected && <ConnectedBadge />}</div>
+            <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-fabric-secondary">Step 2 of 2</span>{connected && <ConnectedBadge />}</div>
             <h1 className="text-lg font-semibold">Connect the Snowflake database</h1>
-            <p className="mt-1 text-sm text-zinc-500">Use a Snowflake account with access to the source data needed for lineage enrichment.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Use a Snowflake account with access to the source data needed for lineage enrichment.</p>
           </div>
         </div>
       </div>

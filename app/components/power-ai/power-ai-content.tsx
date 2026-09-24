@@ -20,12 +20,12 @@ export function PowerAiContent({ onCollapse }: { onCollapse?: () => void }) {
   const statusQuery = usePowerAiStatus();
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className="flex h-full min-h-0 flex-col bg-surface">
       <PowerAiHeader onCollapse={onCollapse} />
 
       {statusQuery.isLoading ? (
-        <div className="flex flex-1 items-center justify-center text-zinc-400">
-          <Loader2 className="size-4 animate-spin" />
+        <div className="flex flex-1 items-center justify-center text-muted-foreground">
+          <Loader2 className="size-4 animate-spin text-fabric" />
         </div>
       ) : !isUnlocked(statusQuery.data) ? (
         <PowerAiLocked reason={lockedReason(statusQuery.data)} />

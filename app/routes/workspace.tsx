@@ -93,18 +93,19 @@ export default function Workspace() {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#e7f2f3] text-zinc-950">
+    <div className="flex min-h-screen flex-col bg-app text-foreground">
       <AppHeader />
 
+      <div className="power-ai-aware flex min-h-0 flex-1 flex-col">
       {/* Mobile-only nav drawer trigger. */}
-      <div className="border-b border-zinc-200 bg-white px-4 py-2 md:hidden">
+      <div className="border-b border-border bg-surface px-4 py-2 md:hidden">
         <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
           <SheetTrigger render={<Button variant="outline" size="sm" />}>
             <Menu className="size-4" />
             Workspace menu
           </SheetTrigger>
           <SheetContent side="left" className="w-[300px] gap-0 p-0">
-            <SheetHeader className="border-b border-zinc-200">
+            <SheetHeader className="border-b border-border">
               <SheetTitle>Workspace</SheetTitle>
             </SheetHeader>
             <div className="min-h-0 flex-1">{sidebar}</div>
@@ -117,14 +118,14 @@ export default function Workspace() {
         style={{ "--left-w": leftCollapsed ? LEFT_SIDEBAR_COLLAPSED_WIDTH : LEFT_SIDEBAR_EXPANDED_WIDTH } as CSSProperties}
       >
         {/* Left nav: hidden below md (mobile uses the Sheet above); a fixed icon rail at tablet; full/collapsible at xl+. */}
-        <aside className="hidden border-r border-zinc-200 md:block">
+        <aside className="hidden border-r border-sidebar-border md:block">
           <div className="xl:hidden">
-            <div className="sticky top-0 h-[calc(100vh-4rem)]">
+            <div className="sticky top-16 h-[calc(100vh-4rem)]">
               <WorkspaceSidebar activeSection={activeSection} apiOperationCount={endpoints.length} onNavigate={navigateTo} collapsed />
             </div>
           </div>
           <div className="hidden h-full xl:flex xl:flex-col">
-            <div className="sticky top-0 flex h-[calc(100vh-4rem)] flex-col">
+            <div className="sticky top-16 flex h-[calc(100vh-4rem)] flex-col">
               <div className="min-h-0 flex-1">
                 <WorkspaceSidebar activeSection={activeSection} apiOperationCount={endpoints.length} onNavigate={navigateTo} collapsed={leftCollapsed} />
               </div>
@@ -133,7 +134,7 @@ export default function Workspace() {
                 onClick={toggleLeftCollapsed}
                 aria-label={leftCollapsed ? "Expand navigation" : "Collapse navigation"}
                 title={leftCollapsed ? "Expand navigation" : "Collapse navigation"}
-                className="flex shrink-0 items-center justify-center gap-2 border-t border-zinc-200 bg-[#fafbfc] py-2.5 text-zinc-400 hover:text-zinc-950"
+                className="flex shrink-0 items-center justify-center gap-2 border-t border-sidebar-border bg-sidebar py-2.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               >
                 {leftCollapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
               </button>
@@ -143,13 +144,13 @@ export default function Workspace() {
 
         <main className="min-w-0 p-4 sm:p-6 lg:p-8">
           {openApiQuery.isLoading && (
-            <div className="mb-4 flex items-center gap-2 border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <div className="mb-4 flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
               <Loader2 className="size-4 animate-spin" />
               Loading backend API catalog
             </div>
           )}
           {openApiQuery.isError && (
-            <div className="mb-4 border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            <div className="mb-4 rounded-md border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
               The API catalog could not be loaded. Check that the application service is available.
             </div>
           )}
@@ -206,14 +207,15 @@ export default function Workspace() {
       </div>
 
       <AppFooter />
+      </div>
     </div>
   );
 }
 
 function ExplorerLoading() {
   return (
-    <div className="flex min-h-[560px] items-center justify-center border border-zinc-200 bg-white text-sm text-zinc-600">
-      <Loader2 className="mr-2 size-4 animate-spin" />
+    <div className="flex min-h-[560px] items-center justify-center rounded-lg border border-border bg-surface text-sm text-muted-foreground">
+      <Loader2 className="mr-2 size-4 animate-spin text-fabric" />
       Loading Explorer
     </div>
   );

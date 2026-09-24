@@ -10,11 +10,15 @@ export default defineConfig({
       "@base-ui/react/checkbox",
       "@base-ui/react/dialog",
       "@base-ui/react/input",
+      "@base-ui/react/menu",
       "@base-ui/react/merge-props",
       "@base-ui/react/select",
       "@base-ui/react/separator",
+      "@base-ui/react/switch",
+      "@base-ui/react/tabs",
+      "@base-ui/react/toast",
+      "@base-ui/react/tooltip",
       "@base-ui/react/use-render",
-      "@dagrejs/dagre",
       "@hookform/resolvers/zod",
       "@tanstack/react-query",
       "@xyflow/react",
@@ -23,6 +27,7 @@ export default defineConfig({
       "class-variance-authority",
       "clsx",
       "cmdk",
+      "elkjs/lib/elk-api.js",
       "lucide-react",
       "react",
       "react-hook-form",
@@ -34,6 +39,9 @@ export default defineConfig({
   },
   resolve: {
     tsconfigPaths: true,
+  },
+  worker: {
+    format: "es",
   },
   server: {
     proxy: {

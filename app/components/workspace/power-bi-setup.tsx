@@ -130,19 +130,19 @@ export function PowerBiSetup({
   }
 
   return (
-    <section className="overflow-hidden border border-zinc-200 bg-white">
-      <div className="border-b border-zinc-200 px-5 py-4 sm:px-6">
+    <section className="overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="border-b border-border px-5 py-4 sm:px-6">
         <div className="flex items-start gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-[8px] bg-sky-700 text-white"><KeyRound className="size-5" /></span>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-fabric text-primary-foreground"><KeyRound className="size-5" /></span>
           <div>
             <div className="mb-1 flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase text-sky-700">Step 1 of 2</span>
+              <span className="text-xs font-semibold uppercase text-fabric">Step 1 of 2</span>
               {isAuthenticated && <ConnectedBadge label="Ready" />}
               {isPartial && <Badge className="rounded-[8px] border border-amber-200 bg-amber-50 text-amber-800">Power BI ready, Fabric unavailable</Badge>}
               {isPending && <Badge className="rounded-[8px] border border-amber-200 bg-amber-50 text-amber-800">Approval pending</Badge>}
             </div>
             <h1 className="text-lg font-semibold">Connect Power BI and Fabric</h1>
-            <p className="mt-1 text-sm text-zinc-500">Enter the Microsoft application details, approve the device code, then check that both services are ready for discovery.</p>
+            <p className="mt-1 text-sm text-muted-foreground">Enter the Microsoft application details, approve the device code, then check that both services are ready for discovery.</p>
           </div>
         </div>
       </div>
@@ -153,9 +153,9 @@ export function PowerBiSetup({
         </ol>
 
         <form onSubmit={form.handleSubmit(startAuthentication)}>
-          <div className="mb-5 inline-flex border border-zinc-200 bg-zinc-50 p-1" role="group" aria-label="Microsoft authentication method">
-            <button type="button" onClick={() => { form.setValue("authenticationMethod", "device_code"); form.clearErrors("clientSecret"); }} className={`inline-flex h-8 items-center gap-2 px-3 text-sm font-medium ${authenticationMethod === "device_code" ? "bg-white text-zinc-950 shadow-sm" : "text-zinc-500 hover:text-zinc-950"}`}><KeyRound className="size-4" /> Device code</button>
-            <button type="button" onClick={() => form.setValue("authenticationMethod", "client_secret")} className={`inline-flex h-8 items-center gap-2 px-3 text-sm font-medium ${authenticationMethod === "client_secret" ? "bg-white text-zinc-950 shadow-sm" : "text-zinc-500 hover:text-zinc-950"}`}><Building2 className="size-4" /> Service principal</button>
+          <div className="mb-5 inline-flex rounded-md border border-border bg-subtle p-1" role="group" aria-label="Microsoft authentication method">
+            <button type="button" onClick={() => { form.setValue("authenticationMethod", "device_code"); form.clearErrors("clientSecret"); }} className={`inline-flex h-8 items-center gap-2 rounded-sm px-3 text-sm font-medium ${authenticationMethod === "device_code" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}><KeyRound className="size-4" /> Device code</button>
+            <button type="button" onClick={() => form.setValue("authenticationMethod", "client_secret")} className={`inline-flex h-8 items-center gap-2 rounded-sm px-3 text-sm font-medium ${authenticationMethod === "client_secret" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}><Building2 className="size-4" /> Service principal</button>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -267,7 +267,7 @@ function ConnectionAlert({ text }: { text: string }) {
 }
 
 function FlowStep({ number, title, text }: { number: string; title: string; text: string }) {
-  return <li className="flex gap-3 border-b border-zinc-200 py-3 last:border-b-0 sm:border-b-0 sm:border-r sm:px-4 sm:first:pl-0 sm:last:border-r-0"><span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-semibold text-white">{number}</span><span><span className="block text-sm font-semibold">{title}</span><span className="mt-0.5 block text-xs leading-5 text-zinc-500">{text}</span></span></li>;
+  return <li className="flex gap-3 border-b border-border py-3 last:border-b-0 sm:border-b-0 sm:border-r sm:px-4 sm:first:pl-0 sm:last:border-r-0"><span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-fabric text-xs font-semibold text-primary-foreground">{number}</span><span><span className="block text-sm font-semibold">{title}</span><span className="mt-0.5 block text-xs leading-5 text-muted-foreground">{text}</span></span></li>;
 }
 
 function getRecordProperty(value: unknown, key: string) {

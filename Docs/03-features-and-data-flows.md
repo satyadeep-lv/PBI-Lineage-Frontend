@@ -145,16 +145,21 @@ Diagram modes (`report-lineage-diagrams.tsx`, React Flow):
 - **Measure/calculated column**: upstream inputs → selected target →
   downstream dependents, 1–6 levels deep.
 
-React Flow is remounted whenever graph identity changes, so a new selection
-fits itself to the viewport instead of inheriting the previous pan/zoom.
+React Flow stays mounted while graph identity changes. Once ELK finishes a
+layout, the viewport API fits the visible nodes without discarding React Flow's
+interaction state; a reset-layout control restores automatic positions after
+manual dragging.
 
 ## Shared Lineage Diagram Engine
 
 Explorer, Report Lineage, Table Impact, and Measure Impact build the same
 `LineageGraph` contract and render it through
-`app/components/workspace/lineage/lineage-diagram.tsx`. Dagre computes
-left-to-right or top-to-bottom positions, React Flow renders directed
-arrowheads, and each custom node can collapse or restore its descendants.
+`app/components/workspace/lineage/lineage-diagram.tsx`. ELK computes layered
+left-to-right or top-to-bottom positions in a Web Worker, React Flow renders
+directed arrowheads and draggable nodes, and each custom node can collapse or
+restore its descendants. Large graphs cull offscreen elements and avoid costly
+edge animation; their initial viewport favors the target's nearest nodes while
+the standard Fit View control remains available for the complete graph.
 `app/lib/dependency-graph.ts` provides the shared breadth-first dependency
 closure used to turn DAX references into those graphs.
 

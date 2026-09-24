@@ -255,7 +255,7 @@ export function EntityChip({ entity, onEntity, disabled = false, describedById, 
       ? "bg-violet-50 text-violet-900 decoration-violet-300"
       : "bg-teal-50 text-teal-900 decoration-teal-300";
   const shared = cn(
-    "rounded-sm px-0.5 underline decoration-dotted underline-offset-2 [box-decoration-break:clone] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600",
+    "rounded-sm px-0.5 font-semibold underline decoration-dotted underline-offset-2 [box-decoration-break:clone] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600",
     tone,
     className,
   );
@@ -293,10 +293,10 @@ export function EntityChip({ entity, onEntity, disabled = false, describedById, 
 const TOKEN_CLASS: Record<DaxTokenType, string> = {
   plain: "",
   function: "text-sky-700 font-semibold",
-  reference: "text-teal-800",
-  string: "text-amber-700",
-  number: "text-violet-700",
-  comment: "text-zinc-400 italic",
+  reference: "text-teal-800 font-semibold",
+  string: "text-amber-700 font-semibold",
+  number: "text-violet-700 font-semibold",
+  comment: "text-zinc-500 font-semibold italic",
 };
 
 /** DAX as sent, coloured by a tokenizer that never changes a character. The copy button copies these exact lines. */

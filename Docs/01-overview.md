@@ -21,8 +21,8 @@ The frontend turns the backend's API surface into guided operational views:
 - Inspect report pages, semantic objects, DAX, source paths, and XMLA
   evidence.
 - Map physical database columns to semantic columns and calculations.
-- Trace report, column, measure, and calculated-column lineage by depth
-  through shared Dagre/React Flow diagrams.
+- Trace report, Snowflake table/column, measure, and calculated-column lineage
+  by depth through shared ELK/React Flow diagrams.
 - Analyze table/column impact and measure impact across a selected workspace
   scope, including downstream/upstream calculations and report/visual usage.
 - Run the explicit Power BI Admin scanner for one to 100 workspaces and browse
@@ -61,7 +61,7 @@ The two communicate only over HTTP.
 | Icons | Lucide React | Interface icons. |
 | Server state | TanStack Query v5 | API caching, loading/error states, invalidation. |
 | UI state | Zustand | API origin + ephemeral admin-key state (`app/stores/app-store.ts`). |
-| Graphs | XYFlow / React Flow plus `@dagrejs/dagre` | Directed, auto-laid-out, collapsible report and impact diagrams. |
+| Graphs | XYFlow / React Flow plus `elkjs` | Worker-laid-out, directed, draggable, collapsible report and impact diagrams. |
 | Tables | AG Grid Community | Sortable/filterable analysis tables, cell/table copy. |
 | Forms | React Hook Form + Zod | Setup form state and validation. |
 | API catalog | Runtime OpenAPI parser (`app/lib/api-catalog.ts`) | Discovers and groups live FastAPI operations — no generated client. |

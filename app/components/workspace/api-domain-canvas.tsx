@@ -141,7 +141,7 @@ export function ApiDomainCanvas({
         </div>
       ) : (
         <div className="grid xl:grid-cols-[290px_minmax(0,1fr)]">
-          <aside className="border-b border-zinc-200 bg-[#fafbfc] p-4 xl:border-b-0 xl:border-r">
+          <aside className="border-b border-border bg-subtle p-4 xl:border-b-0 xl:border-r">
             <div className="relative mb-3">
               <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-zinc-400" />
               <Input

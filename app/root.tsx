@@ -10,24 +10,30 @@ import {
 import type { Route } from "./+types/root";
 import "./app.css";
 import { PowerAiWidget } from "./components/power-ai/power-ai-widget";
+import { ThemeProvider, themeInitializationScript } from "./components/theme-provider";
 import { QueryProvider } from "./lib/query-provider";
 
 export const links: Route.LinksFunction = () => [{ rel: "icon", type: "image/png", href: "/tab_logo.png" }];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#F5FAFA" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#071317" media="(prefers-color-scheme: dark)" />
+        <script dangerouslySetInnerHTML={{ __html: themeInitializationScript }} />
         <Meta />
         <Links />
       </head>
       <body>
-        <QueryProvider>
-          {children}
-          <PowerAiWidget />
-        </QueryProvider>
+        <ThemeProvider>
+          <QueryProvider>
+            {children}
+            <PowerAiWidget />
+          </QueryProvider>
+        </ThemeProvider>
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -56,7 +62,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <main className="pt-16 p-4 container mx-auto">
+    <main className="container mx-auto p-6 pt-20">
       <h1>{message}</h1>
       <p>{details}</p>
       {stack && (

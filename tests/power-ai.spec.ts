@@ -285,7 +285,9 @@ test.describe("Power AI — chat transports", () => {
   test("stopping mid-stream cancels cleanly without an error", async ({ page }) => {
     await mockAiStatus(page, { status: 200, json: readyStatus() });
     await page.route("**/api/v1/ai/chat/stream", async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Leave enough time for the browser to paint the in-flight state even
+      // when the full suite has the dev server and data-grid workers busy.
+      await new Promise((resolve) => setTimeout(resolve, 5000));
       return route.fulfill(sseResponse({ deltas: ["This should never fully arrive."] }));
     });
 
@@ -453,7 +455,7 @@ test.describe("Power AI — evidence and claim states", () => {
 test.describe("Power AI — measure definition panel", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test("shows only the definition: header, tabs for the sections present, cards, and the lineage strip", async ({ page }) => {
+  test("shows only the definition: header, tabs, cards, and no definition diagram", async ({ page }) => {
     const explainBodies: Array<Record<string, unknown>> = [];
     await openMeasurePanel(page, (body) => {
       explainBodies.push(body);
@@ -494,13 +496,8 @@ test.describe("Power AI — measure definition panel", () => {
     await expect(tabs.filter({ hasText: "Database" })).toHaveAttribute("aria-current", "true");
     await expect(panel.locator("section", { has: page.getByRole("heading", { name: "Reads from (database lineage)" }) })).toHaveClass(/ring-2/);
 
-    // Layers straight from the evidence, database to visuals.
-    await expect(panel.locator('[data-layer="database"]')).toContainText("PBI_DB.MART.V_ORDERS");
-    await expect(panel.locator('[data-layer="inputs"]')).toContainText("Orders[Revenue]");
-    await expect(panel.locator('[data-layer="measure"]')).toContainText("Orders[Total Revenue]");
-    await expect(panel.locator('[data-layer="dependents"] li')).toHaveText(["Orders[Profit Margin %]"]);
-    await expect(panel.locator('[data-layer="visuals"]')).toContainText("Margin Card");
-    await expect(panel.locator('[data-layer="visuals"]')).toContainText("Sales Overview › Overview");
+    await expect(panel.locator("[data-layer]")).toHaveCount(0);
+    await expect(panel.getByRole("button", { name: "Orders[Profit Margin %]", exact: true })).toHaveClass(/font-semibold/);
 
     // The download still carries every evidence item the screen no longer lists.
     const downloaded = page.waitForEvent("download");
@@ -591,7 +588,7 @@ test.describe("Power AI — interactive answers", () => {
     await chip.click();
 
     await expect(page.getByText("Total Revenue sums Revenue.")).toBeVisible();
-    await expect(page.locator(".bg-zinc-950", { hasText: "Explain Orders[Total Revenue]" })).toBeVisible();
+    await expect(page.getByText("Explain Orders[Total Revenue]", { exact: true })).toBeVisible();
     expect(bodies).toHaveLength(2);
     expect(bodies[1]).toMatchObject({ message: "Explain Orders[Total Revenue]", context: { object_type: "measure", object_name: "Orders[Total Revenue]" } });
   });

@@ -1,4 +1,5 @@
 import {
+  ArrowDown,
   ArrowRight,
   BarChart3,
   Database,
@@ -23,85 +24,57 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-const questions = [
-  {
-    number: "01",
-    title: "Where did this report value come from?",
-    text: "Follow the evidence from a visual and its fields through measures, semantic objects, and the underlying source structure.",
-  },
-  {
-    number: "02",
-    title: "What changes if this object changes?",
-    text: "Inspect downstream dependencies before changing a table, column, calculated column, measure, model, or report.",
-  },
-  {
-    number: "03",
-    title: "Who and what depend on this asset?",
-    text: "Bring report access, workspace context, visual usage, and dependency depth into the same investigation.",
-  },
+const evidenceLayers = [
+  { icon: Database, label: "Source systems", detail: "Databases and schemas" },
+  { icon: TableProperties, label: "Semantic layer", detail: "Models, fields, and DAX" },
+  { icon: BarChart3, label: "Power BI assets", detail: "Reports, pages, and visuals" },
+  { icon: GitBranch, label: "Change impact", detail: "Dependencies and affected assets" },
 ];
 
-const evidenceLayers = [
-  {
-    icon: Database,
-    label: "Source systems",
-    detail: "Databases, files, schemas, tables, columns, and gateways",
-  },
-  {
-    icon: TableProperties,
-    label: "Semantic layer",
-    detail: "Models, tables, relationships, measures, calculated columns, and DAX",
-  },
-  {
-    icon: BarChart3,
-    label: "Power BI assets",
-    detail: "Workspaces, reports, pages, visuals, dashboards, apps, and access",
-  },
-  {
-    icon: GitBranch,
-    label: "Change impact",
-    detail: "Column paths, measure dependencies, affected objects, and lineage depth",
-  },
+const investigationPrompts = [
+  ["Trace a value", "Follow report evidence through measures, semantic objects, and verified source structures."],
+  ["Assess a change", "Inspect downstream table, measure, report, page, and visual dependencies before release."],
+  ["Review access and coverage", "Keep workspace context, asset ownership, scan coverage, and warnings in one workflow."],
 ];
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-white text-zinc-950">
+    <div className="min-h-screen bg-app text-foreground">
       <AppHeader showHealth={false} />
 
-      <main>
-        <section className="overflow-hidden border-b border-zinc-200 bg-[#f4f7f8]">
-          <div className="mx-auto max-w-screen-2xl px-4 pt-14 sm:px-6 sm:pt-18 lg:px-8 lg:pt-20">
+      <main className="power-ai-aware">
+        <section className="border-b border-border bg-app">
+          <div className="mx-auto max-w-screen-2xl px-4 pt-10 sm:px-6 sm:pt-12 lg:px-8 lg:pt-14">
             <div className="max-w-4xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-teal-700">
+              <p className="text-xs font-semibold uppercase text-fabric">
                 Power BI lineage and impact analysis
               </p>
-              <h1 className="mt-4 text-4xl font-semibold leading-tight tracking-normal text-zinc-950 sm:text-5xl lg:text-6xl">
+              <h1 className="mt-3 text-4xl font-semibold leading-tight text-foreground sm:text-5xl">
                 PBI Lineage Explorer
               </h1>
-              <p className="mt-6 max-w-3xl text-base leading-7 text-zinc-600 sm:text-lg sm:leading-8">
+              <p className="mt-4 max-w-3xl text-base leading-7 text-muted-foreground sm:text-lg">
                 Trace how source data becomes semantic logic, reports, and business decisions. Investigate dependencies and change impact without piecing evidence together by hand.
               </p>
-              <Button
-                nativeButton={false}
-                size="lg"
-                className="mt-8 h-11 bg-zinc-950 px-5 text-white hover:bg-zinc-800"
-                render={<Link to="/workspace/power-bi" />}
-              >
-                Start
-                <ArrowRight className="size-4" />
-              </Button>
+              <div className="mt-7 flex flex-wrap gap-3">
+                <Button nativeButton={false} size="lg" render={<Link to="/workspace/explorer" />}>
+                  Start exploring
+                  <ArrowRight className="size-4" />
+                </Button>
+                <Button nativeButton={false} size="lg" variant="outline" render={<Link to="/setup-guide" />}>
+                  Setup guide
+                </Button>
+              </div>
             </div>
 
-            <div className="mt-12 border-x border-t border-zinc-300 bg-white sm:mt-14">
-              <div className="flex items-center justify-between gap-4 border-b border-zinc-200 px-4 py-3 sm:px-5">
-                <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-zinc-800">
-                  <ScanSearch className="size-4 shrink-0 text-teal-700" />
+            <div className="mt-9 overflow-hidden rounded-t-lg border-x border-t border-border bg-surface sm:mt-10">
+              <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 sm:px-5">
+                <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
+                  <ScanSearch className="size-4 shrink-0 text-fabric" />
                   <span className="truncate">Lineage investigation workspace</span>
                 </div>
-                <span className="hidden text-xs text-zinc-500 sm:block">Report, semantic, and source evidence</span>
+                <span className="hidden text-xs text-muted-foreground sm:block">Verified report, semantic, and source evidence</span>
               </div>
-              <div className="aspect-[16/8.4] min-h-[220px] overflow-hidden bg-zinc-100">
+              <div className="aspect-[16/7.4] min-h-[210px] overflow-hidden bg-subtle">
                 <img
                   src="/product-lineage-view.png"
                   alt="PBI Lineage Explorer report lineage workspace"
@@ -112,71 +85,55 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="border-b border-zinc-200 bg-white">
-          <div className="mx-auto grid max-w-screen-2xl gap-10 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[0.72fr_1.28fr] lg:gap-20 lg:px-8">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-teal-700">Start with the question</p>
-              <h2 className="mt-3 max-w-md text-3xl font-semibold leading-tight tracking-normal sm:text-4xl">
-                Understand the path before making the change.
-              </h2>
-              <p className="mt-5 max-w-md text-sm leading-6 text-zinc-600">
-                The application keeps technical evidence connected while presenting each step in language that report owners, analysts, and engineers can use together.
+        <section className="border-b border-border bg-surface" aria-labelledby="evidence-path-heading">
+          <div className="mx-auto max-w-screen-2xl px-4 py-12 sm:px-6 lg:px-8">
+            <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+              <div>
+                <p className="text-xs font-semibold uppercase text-fabric">Connected evidence path</p>
+                <h2 id="evidence-path-heading" className="mt-2 text-2xl font-semibold sm:text-3xl">
+                  From source systems to change impact
+                </h2>
+              </div>
+              <p className="max-w-xl text-sm leading-6 text-muted-foreground">
+                Each view keeps the workspace, report, semantic model, and physical source context visible as the investigation moves downstream.
               </p>
             </div>
 
-            <div className="border-t border-zinc-300">
-              {questions.map((question) => (
-                <article
-                  key={question.number}
-                  className="grid gap-3 border-b border-zinc-200 py-6 sm:grid-cols-[3rem_0.85fr_1.15fr] sm:gap-5 sm:py-7"
-                >
-                  <span className="font-mono text-xs text-teal-700">{question.number}</span>
-                  <h3 className="text-base font-semibold leading-6 text-zinc-950">{question.title}</h3>
-                  <p className="text-sm leading-6 text-zinc-600">{question.text}</p>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="border-b border-zinc-200 bg-[#edf4f2]">
-          <div className="mx-auto max-w-screen-2xl px-4 py-16 sm:px-6 sm:py-20 lg:px-8">
-            <div className="max-w-2xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-teal-700">One connected evidence path</p>
-              <h2 className="mt-3 text-3xl font-semibold tracking-normal text-zinc-950 sm:text-4xl">
-                From physical source to business-facing asset.
-              </h2>
-            </div>
-
-            <div className="mt-10 grid border-y border-zinc-300 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-8 grid gap-2 md:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] md:items-stretch">
               {evidenceLayers.map((layer, index) => (
-                <article
-                  key={layer.label}
-                  className={`min-h-52 py-7 sm:px-6 ${index > 0 ? "border-t border-zinc-300 sm:border-t-0" : ""} ${index % 2 === 1 ? "sm:border-l sm:border-zinc-300" : ""} ${index > 1 ? "lg:border-l lg:border-zinc-300" : ""}`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <layer.icon className="size-5 text-teal-700" />
-                    <span className="font-mono text-xs text-zinc-500">0{index + 1}</span>
-                  </div>
-                  <h3 className="mt-8 text-base font-semibold text-zinc-950">{layer.label}</h3>
-                  <p className="mt-3 text-sm leading-6 text-zinc-600">{layer.detail}</p>
-                </article>
+                <div key={layer.label} className="contents">
+                  <article className="rounded-lg border border-border bg-subtle px-4 py-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-md border border-fabric/20 bg-surface text-fabric">
+                        <layer.icon className="size-4" />
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="text-sm font-semibold">{layer.label}</h3>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{layer.detail}</p>
+                      </div>
+                    </div>
+                  </article>
+                  {index < evidenceLayers.length - 1 ? (
+                    <div className="flex items-center justify-center py-1 text-fabric" aria-hidden="true">
+                      <ArrowDown className="size-4 md:hidden" />
+                      <ArrowRight className="hidden size-4 md:block" />
+                    </div>
+                  ) : null}
+                </div>
               ))}
             </div>
           </div>
         </section>
 
-        <section className="bg-[#edf4f2]">
-          <div className="mx-auto grid max-w-screen-2xl gap-8 px-4 py-14 sm:px-6 lg:grid-cols-[1fr_auto] lg:items-center lg:px-8">
-            <div className="max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-teal-700">Built for shared analysis</p>
-              <h2 className="mt-3 text-2xl font-semibold tracking-normal sm:text-3xl">
-                Keep discovery, dependency analysis, and change planning grounded in the same evidence.
-              </h2>
-            </div>
-            <p className="max-w-md text-sm leading-6 text-zinc-600 lg:text-right">
-              Guided setup supports first-time users. Explorer and report lineage views provide the detail needed for ongoing investigation.
-            </p>
+        <section className="bg-app">
+          <div className="mx-auto grid max-w-screen-2xl gap-0 px-4 py-12 sm:px-6 lg:grid-cols-3 lg:px-8">
+            {investigationPrompts.map(([title, text], index) => (
+              <article key={title} className="border-b border-border py-5 last:border-b-0 lg:border-r lg:border-b-0 lg:px-6 lg:first:pl-0 lg:last:border-r-0">
+                <span className="font-mono text-xs text-fabric">0{index + 1}</span>
+                <h2 className="mt-3 text-base font-semibold">{title}</h2>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
+              </article>
+            ))}
           </div>
         </section>
       </main>

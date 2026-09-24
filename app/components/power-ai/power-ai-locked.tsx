@@ -26,7 +26,7 @@ export function PowerAiLocked({ reason }: { reason: AiUnavailableReason }) {
             Complete Power BI setup with a device code or a service principal to unlock the AI assistant.
           </p>
         </div>
-        <a href="/workspace/power-bi" className="mt-1 inline-flex h-8 items-center rounded-lg bg-zinc-950 px-3 text-xs font-medium text-white hover:bg-zinc-800">
+        <a href="/workspace/power-bi" className="mt-1 inline-flex h-8 items-center rounded-md bg-fabric px-3 text-xs font-medium text-primary-foreground hover:bg-fabric-hover">
           Open Power BI setup
         </a>
       </div>

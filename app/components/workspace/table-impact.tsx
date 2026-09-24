@@ -141,21 +141,21 @@ export function TableImpact() {
   if (workspacesQuery.isError) return <PowerBiAuthRequired returnTo="Table impact" />;
   if (!workspaces.length) return <EmptyState title="No Power BI workspaces found" text="The authenticated account did not return any workspaces to explore." />;
 
-  return <section className="border border-zinc-200 bg-white">
-    <div className="border-b border-zinc-200 px-5 py-5 sm:px-6">
+  return <section className="overflow-hidden rounded-lg border border-border bg-surface">
+    <div className="border-b border-border px-5 py-5 sm:px-6">
       <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-[8px] bg-teal-700 text-white"><TableProperties className="size-5" /></span>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-fabric text-primary-foreground"><TableProperties className="size-5" /></span>
         <div>
-          <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-teal-700">Power BI</span><Badge className="rounded-[8px] border border-teal-200 bg-teal-50 text-teal-800">Table impact</Badge></div>
+          <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase text-fabric">Power BI</span><Badge className="rounded-md border border-fabric/25 bg-accent text-accent-foreground">Table impact</Badge></div>
           <h1 className="text-lg font-semibold">Table impact</h1>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500">Pick a semantic table (or one column) to see every calculation that depends on it, and every report and visual that uses those calculations.</p>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">Pick a semantic table (or one column) to see every calculation that depends on it, and every report and visual that uses those calculations.</p>
         </div>
       </div>
     </div>
 
     <InventoryStatus selectedWorkspaceCount={scopeIds.length} isLoading={inventoryQuery.isFetching} isError={inventoryQuery.isError} tableCount={tables.length} skippedCount={inventoryQuery.data?.skipped.length ?? 0} onRefresh={() => void inventoryQuery.refetch()} />
 
-    <div className="grid gap-4 border-b border-zinc-200 bg-[#fafbfc] px-5 py-4 sm:px-6 md:grid-cols-4">
+    <div className="grid gap-4 border-b border-border bg-subtle px-5 py-4 sm:px-6 md:grid-cols-4">
       <WorkspaceScopeSelect id="table-impact-scope" label="Workspace scope" workspaces={workspaces} selectedIds={scopeIds} onChange={setSelectedWorkspaceIds} />
       <ObjectSearchSelect id="table-impact-table" label="Table" placeholder="Search a table by name..." entries={tableEntries} selectedKey={selectedTableKey} onChange={setSelectedTableKey} emptyText="No tables indexed for the selected workspace scope yet." />
       <LabelSelect id="table-impact-column" label="Column" value={selectedColumnKey} options={[{ value: WHOLE_TABLE, label: "Whole table" }, ...(selectedTable?.columns.map((column) => ({ value: column.name, label: column.name })) ?? [])]} onChange={setSelectedColumnKey} />
@@ -270,8 +270,8 @@ function displayType(value: string) {
 }
 
 function InventoryStatus({ selectedWorkspaceCount, isLoading, isError, tableCount, skippedCount, onRefresh }: { selectedWorkspaceCount: number; isLoading: boolean; isError: boolean; tableCount: number; skippedCount: number; onRefresh: () => void }) {
-  return <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-[#fafbfc] px-5 py-2.5 text-xs sm:px-6">
-    <span className="text-zinc-500">
+  return <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-subtle px-5 py-2.5 text-xs sm:px-6">
+    <span className="text-muted-foreground">
       {!selectedWorkspaceCount
         ? "Select at least one workspace to build the table inventory."
         : isLoading

@@ -225,7 +225,7 @@ Never add generated `node_modules/`, `.react-router/`, `build/`,
 | Icons | Lucide React | Consistent interface icons. |
 | Server state | TanStack Query v5 | API caching, loading/error states, invalidation, and background preparation. |
 | UI state | Zustand | API origin/admin key, persisted desktop layout preference, and minimally persisted Power AI audience preference. |
-| Graphs | XYFlow / React Flow with `@dagrejs/dagre` layout | Directed, auto-laid-out, collapsible report, column, measure, table-impact, and measure-impact diagrams. |
+| Graphs | XYFlow / React Flow with `elkjs` layout | Worker-laid-out, directed, draggable, collapsible report, Snowflake, column, measure, and impact diagrams. |
 | Tables | AG Grid Community | Sortable/filterable analysis tables and selectable values. |
 | Forms | React Hook Form and Zod | Setup form state and validation. |
 | API catalog | Runtime OpenAPI parser | Discovers and groups current FastAPI operations. |
@@ -344,8 +344,8 @@ Use `localhost` consistently. Binding the server to `127.0.0.1` while React
 Router generates development imports for `localhost` can cause failed dynamic
 module requests during optimization reloads.
 
-Vite explicitly prebundles all runtime packages imported by the route graph,
-including Base UI, forms, TanStack Query, XYFlow, AG Grid, Dagre, cmdk,
+Vite explicitly prebundles the runtime packages imported by the route graph,
+including Base UI, forms, TanStack Query, XYFlow, AG Grid, the ELK API, cmdk,
 Lucide, and Zustand. React Router's virtual route entry otherwise lets some
 lazy-route dependencies be discovered in later waves; each new wave can
 invalidate modules already requested by the browser. A clean install can spend
@@ -560,27 +560,29 @@ Sections, and the endpoint behind each:
 
 ## Lineage Diagram Engine
 
-Table Impact and Measure Impact render their diagrams through one shared
-engine in `app/components/workspace/lineage/`, so every dependency diagram in
-the application looks and behaves the same way. Explorer and Report Lineage
-present their evidence as grids rather than diagrams:
+Report Lineage, Snowflake tracing, Table Impact, and Measure Impact render
+their diagrams through one shared engine in
+`app/components/workspace/lineage/`, so every dependency diagram in the
+application looks and behaves the same way:
 
 - `lineage-types.ts` defines the diagram-agnostic `LineageGraph` shape
   (`LineageGraphNode`/`LineageGraphEdge`) that every feature builds toward.
-- `lineage-layout.ts` runs `@dagrejs/dagre` to automatically compute a
-  layered, left-to-right or top-to-bottom position for every node; no feature
-  hand-computes `x`/`y` coordinates.
+- `lineage-layout.ts` lazy-loads `elkjs` and runs its layered algorithm in a
+  Web Worker to compute left-to-right or top-to-bottom positions without
+  blocking the interface; no feature hand-computes `x`/`y` coordinates.
 - `lineage-node.tsx` renders a tone-colored card per object kind with a
   collapse/expand chevron. Collapsing a node hides every node strictly
   farther from the diagram's root through it (an undirected "display tree"
   computed with breadth-first search, rooted at the focal node or at
   in-degree-zero nodes), so collapse behaves correctly even in bidirectional
   upstream+downstream diagrams such as Measure Impact.
-- `lineage-diagram.tsx` exports `<LineageDiagram>`, which owns collapse
-  state, derives the currently visible node/edge subset, lays it out with
-  dagre, and renders it with React Flow. Edges always carry an arrowhead
-  (`MarkerType.ArrowClosed`), so dependency direction is visible without
-  reading labels.
+- `lineage-diagram.tsx` exports `<LineageDiagram>`, which owns collapse state,
+  derives the currently visible node/edge subset, lays it out with ELK, and
+  renders draggable nodes with React Flow. It keeps the flow mounted across
+  layouts, offers an automatic-layout reset, culls offscreen elements for
+  large traces, focuses the nearest target context first, and limits costly
+  edge animation. Edges always carry an arrowhead (`MarkerType.ArrowClosed`),
+  so dependency direction is visible without reading labels.
 
 `app/lib/dependency-graph.ts` complements the diagram engine with
 `computeDependencyClosure`, a single multi-source breadth-first search over
@@ -775,7 +777,7 @@ operator must still enter IDs and values valid for the connected tenant.
 | API execution result | `useApiExecutor` | Current workspace route mount. |
 | API origin | Zustand | In-memory page lifetime, initialized from `VITE_API_ORIGIN`. |
 | Administrative key | Zustand | Ephemeral memory only; no visible input or persistence. |
-| Diagram collapse/expand state | `LineageDiagram` component state | Current diagram mount; resets whenever the underlying graph changes. |
+| Diagram collapse/expand state | `LineageDiagram` component state | Current graph; resets whenever the underlying graph changes. |
 | Scan progress (`scan_id`, status, result) | `useWorkspaceScan` + TanStack Query | Component/query memory only; resets when the workspace scope changes or the component unmounts. |
 | Form inputs | React Hook Form or component state | Current component mount. |
 | Power BI/Snowflake session | FastAPI cookie/session | Backend policy controls lifetime. |
@@ -1021,9 +1023,9 @@ application is directed, auto-laid-out, and collapsible in the same way.
 | File | Purpose and fulfilled responsibility |
 | --- | --- |
 | `app/components/workspace/lineage/lineage-types.ts` | Declares the diagram-agnostic `LineageGraph`/`LineageGraphNode`/`LineageGraphEdge` shapes every feature builds toward, plus the React Flow node-data type. |
-| `app/components/workspace/lineage/lineage-layout.ts` | Runs `@dagrejs/dagre` to compute layered node positions for a given direction (`LR`/`TB`) and estimates node height from detail-text length. |
+| `app/components/workspace/lineage/lineage-layout.ts` | Lazy-loads a worker-backed `elkjs` layered layout for a given direction (`LR`/`TB`), provides fallback positions, and estimates node height from detail-text length. |
 | `app/components/workspace/lineage/lineage-node.tsx` | Custom React Flow node: tone-colored card per object kind, with a collapse/expand chevron and a hidden-descendant count when the node has children. |
-| `app/components/workspace/lineage/lineage-diagram.tsx` | Exports `<LineageDiagram>`: builds an undirected "display tree" from the graph, owns collapse state, derives the visible node/edge subset, lays it out with dagre, and renders it with directed arrowheads via React Flow. |
+| `app/components/workspace/lineage/lineage-diagram.tsx` | Exports `<LineageDiagram>`: builds an undirected "display tree", owns collapse state, derives the visible subgraph, runs ELK without remounting React Flow, and renders draggable nodes, reset/viewport controls, culling, and directed arrowheads. |
 
 ### API, Query, Utility, And State Files
 
