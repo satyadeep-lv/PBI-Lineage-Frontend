@@ -4,7 +4,7 @@ import {
   BarChart3,
   Database,
   GitBranch,
-  ScanSearch,
+  PlayCircle,
   TableProperties,
 } from "lucide-react";
 import { Link } from "react-router";
@@ -37,6 +37,27 @@ const investigationPrompts = [
   ["Review access and coverage", "Keep workspace context, asset ownership, scan coverage, and warnings in one workflow."],
 ];
 
+/**
+ * The captions burned into /how-to-use-*.gif, in order. Regenerate the
+ * animation with scripts/walkthrough/ (capture.cjs, then compose.py) whenever
+ * these or the screens they show change.
+ */
+const walkthroughSteps = [
+  "Connect Power BI & Fabric",
+  "Connect your database (optional)",
+  "See everything your account can access",
+  "Open any report in Explorer",
+  "Trace report lineage end to end",
+  "Check which reports, models, and measures use a table",
+  "Follow a measure to every visual",
+  "Ask Power AI about anything you can see",
+  "Setup guide and API reference live under Documents",
+];
+
+/** Pixel size of both walkthrough GIFs and their posters. */
+const WALKTHROUGH_WIDTH = 1280;
+const WALKTHROUGH_HEIGHT = 800;
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-app text-foreground">
@@ -66,22 +87,56 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="mt-9 overflow-hidden rounded-t-lg border-x border-t border-border bg-surface sm:mt-10">
+            <figure className="mt-9 overflow-hidden rounded-t-lg border-x border-t border-border bg-surface sm:mt-10">
               <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 sm:px-5">
                 <div className="flex min-w-0 items-center gap-2 text-sm font-medium text-foreground">
-                  <ScanSearch className="size-4 shrink-0 text-fabric" />
-                  <span className="truncate">Lineage investigation workspace</span>
+                  <PlayCircle className="size-4 shrink-0 text-fabric" />
+                  <span className="truncate">How PBI Lineage Explorer works</span>
                 </div>
-                <span className="hidden text-xs text-muted-foreground sm:block">Verified report, semantic, and source evidence</span>
+                <span className="hidden text-xs text-muted-foreground sm:block">
+                  Animated walkthrough · {walkthroughSteps.length} steps
+                </span>
               </div>
-              <div className="aspect-[16/7.4] min-h-[210px] overflow-hidden bg-subtle">
-                <img
-                  src="/product-lineage-view.png"
-                  alt="PBI Lineage Explorer report lineage workspace"
-                  className="size-full object-cover object-top"
-                />
+              {/* One animation per theme; each falls back to its still poster under reduced motion. */}
+              <div className="aspect-[1280/800] bg-subtle">
+                <picture className="block size-full dark:hidden">
+                  <source media="(prefers-reduced-motion: reduce)" srcSet="/how-to-use-light.png" />
+                  <img
+                    src="/how-to-use-light.gif"
+                    alt="Animated walkthrough of PBI Lineage Explorer"
+                    width={WALKTHROUGH_WIDTH}
+                    height={WALKTHROUGH_HEIGHT}
+                    loading="lazy"
+                    decoding="async"
+                    className="size-full object-contain"
+                  />
+                </picture>
+                <picture className="hidden size-full dark:block">
+                  <source media="(prefers-reduced-motion: reduce)" srcSet="/how-to-use-dark.png" />
+                  <img
+                    src="/how-to-use-dark.gif"
+                    alt="Animated walkthrough of PBI Lineage Explorer"
+                    width={WALKTHROUGH_WIDTH}
+                    height={WALKTHROUGH_HEIGHT}
+                    loading="lazy"
+                    decoding="async"
+                    className="size-full object-contain"
+                  />
+                </picture>
               </div>
-            </div>
+              <figcaption className="border-t border-border px-4 py-4 sm:px-5">
+                <ol className="grid gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {walkthroughSteps.map((step, index) => (
+                    <li key={step} className="flex min-w-0 gap-2.5 text-xs leading-5 text-muted-foreground">
+                      <span aria-hidden="true" className="shrink-0 font-mono text-fabric">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </figcaption>
+            </figure>
           </div>
         </section>
 

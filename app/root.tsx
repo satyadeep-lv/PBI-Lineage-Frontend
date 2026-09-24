@@ -13,7 +13,10 @@ import { PowerAiWidget } from "./components/power-ai/power-ai-widget";
 import { ThemeProvider, themeInitializationScript } from "./components/theme-provider";
 import { QueryProvider } from "./lib/query-provider";
 
-export const links: Route.LinksFunction = () => [{ rel: "icon", type: "image/png", href: "/tab_logo.png" }];
+export const links: Route.LinksFunction = () => [
+  { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
+  { rel: "icon", type: "image/png", sizes: "512x512", href: "/tab_logo.png" },
+];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (

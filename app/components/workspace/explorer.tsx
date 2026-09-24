@@ -10,6 +10,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -51,10 +52,13 @@ const tabs: Array<{ id: ExplorerTab; label: string; shortLabel: string }> = [
 
 export function Explorer() {
   const apiOrigin = useAppStore((state) => state.apiOrigin);
-  const [activeTab, setActiveTab] = useState<ExplorerTab>("assets");
-  const [activeReportSection, setActiveReportSection] = useState<ReportSection>("report-detail");
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
-  const [selectedReportId, setSelectedReportId] = useState("");
+  // Deep links from Overview (see explorerHref) seed only the first selection; the selectors own it after that.
+  const [searchParams] = useSearchParams();
+  const [requestedModelId, setRequestedModelId] = useState(() => searchParams.get("model") ?? "");
+  const [activeTab, setActiveTab] = useState<ExplorerTab>(() => (searchParams.get("report") || searchParams.get("model") ? "reports" : "assets"));
+  const [activeReportSection, setActiveReportSection] = useState<ReportSection>(() => (searchParams.get("model") ? "semantic-objects" : "report-detail"));
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(() => searchParams.get("workspace") ?? "");
+  const [selectedReportId, setSelectedReportId] = useState(() => searchParams.get("report") ?? "");
 
   const workspacesQuery = useQuery({
     queryKey: workspaceListKey(apiOrigin),
@@ -104,6 +108,20 @@ export function Explorer() {
       setSelectedReportId(reports[0].id);
     }
   }, [reports, selectedReportId]);
+
+  // A semantic-model deep link opens a report bound to that model, exactly like
+  // picking the model in Assets & access; with no bound report it stays there.
+  useEffect(() => {
+    if (!requestedModelId || !reportsQuery.isSuccess) return;
+    const boundReport = reports.find((report) => report.dataset_id === requestedModelId);
+    if (boundReport) {
+      setSelectedReportId(boundReport.id);
+    } else {
+      setActiveTab("assets");
+      setActiveReportSection("report-detail");
+    }
+    setRequestedModelId("");
+  }, [reports, reportsQuery.isSuccess, requestedModelId]);
 
   const selectedReport = reports.find((report) => report.id === selectedReportId) ?? null;
   const reportSemanticModel = selectedReport?.dataset_id

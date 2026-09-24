@@ -20,10 +20,15 @@ import {
 } from "~/components/ui/sheet";
 import { fetchOpenApi, flattenEndpoints, SETUP_ENDPOINT_DEFINITIONS } from "~/lib/api-catalog";
 import { useApiExecutor } from "~/lib/use-api-executor";
+import { cn } from "~/lib/utils";
+import { WORKSPACE_SECTIONS } from "~/lib/workspace-routes";
 import { useAppStore } from "~/stores/app-store";
 import { LEFT_SIDEBAR_COLLAPSED_WIDTH, LEFT_SIDEBAR_EXPANDED_WIDTH, useLayoutStore } from "~/stores/layout-store";
 import { usePowerAiStore } from "~/stores/power-ai-store";
 
+const Overview = lazy(() =>
+  import("~/components/workspace/overview").then((module) => ({ default: module.Overview })),
+);
 const Explorer = lazy(() =>
   import("~/components/workspace/explorer").then((module) => ({ default: module.Explorer })),
 );
@@ -53,6 +58,8 @@ export default function Workspace() {
   const leftCollapsed = useLayoutStore((state) => state.leftCollapsed);
   const toggleLeftCollapsed = useLayoutStore((state) => state.toggleLeftCollapsed);
   const activeSection = section ?? "power-bi";
+  // API reference is a Documents page: it renders full-width without the workspace nav.
+  const isDocumentation = !WORKSPACE_SECTIONS.has(activeSection);
 
   useEffect(() => {
     usePowerAiStore.getState().mergeContext({ route: location.pathname });
@@ -87,7 +94,6 @@ export default function Workspace() {
   const sidebar = (
     <WorkspaceSidebar
       activeSection={activeSection}
-      apiOperationCount={endpoints.length}
       onNavigate={navigateTo}
     />
   );
@@ -98,49 +104,56 @@ export default function Workspace() {
 
       <div className="power-ai-aware flex min-h-0 flex-1 flex-col">
       {/* Mobile-only nav drawer trigger. */}
-      <div className="border-b border-border bg-surface px-4 py-2 md:hidden">
-        <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
-          <SheetTrigger render={<Button variant="outline" size="sm" />}>
-            <Menu className="size-4" />
-            Workspace menu
-          </SheetTrigger>
-          <SheetContent side="left" className="w-[300px] gap-0 p-0">
-            <SheetHeader className="border-b border-border">
-              <SheetTitle>Workspace</SheetTitle>
-            </SheetHeader>
-            <div className="min-h-0 flex-1">{sidebar}</div>
-          </SheetContent>
-        </Sheet>
-      </div>
+      {!isDocumentation && (
+        <div className="border-b border-border bg-surface px-4 py-2 md:hidden">
+          <Sheet open={mobileNavigationOpen} onOpenChange={setMobileNavigationOpen}>
+            <SheetTrigger render={<Button variant="outline" size="sm" />}>
+              <Menu className="size-4" />
+              Workspace menu
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[300px] gap-0 p-0">
+              <SheetHeader className="border-b border-border">
+                <SheetTitle>Workspace</SheetTitle>
+              </SheetHeader>
+              <div className="min-h-0 flex-1">{sidebar}</div>
+            </SheetContent>
+          </Sheet>
+        </div>
+      )}
 
       <div
-        className="mx-auto grid w-full max-w-screen-2xl flex-1 md:grid-cols-[64px_minmax(0,1fr)] xl:grid-cols-[var(--left-w)_minmax(0,1fr)]"
+        className={cn(
+          "mx-auto grid w-full max-w-screen-2xl flex-1",
+          !isDocumentation && "md:grid-cols-[64px_minmax(0,1fr)] xl:grid-cols-[var(--left-w)_minmax(0,1fr)]",
+        )}
         style={{ "--left-w": leftCollapsed ? LEFT_SIDEBAR_COLLAPSED_WIDTH : LEFT_SIDEBAR_EXPANDED_WIDTH } as CSSProperties}
       >
         {/* Left nav: hidden below md (mobile uses the Sheet above); a fixed icon rail at tablet; full/collapsible at xl+. */}
-        <aside className="hidden border-r border-sidebar-border md:block">
-          <div className="xl:hidden">
-            <div className="sticky top-16 h-[calc(100vh-4rem)]">
-              <WorkspaceSidebar activeSection={activeSection} apiOperationCount={endpoints.length} onNavigate={navigateTo} collapsed />
-            </div>
-          </div>
-          <div className="hidden h-full xl:flex xl:flex-col">
-            <div className="sticky top-16 flex h-[calc(100vh-4rem)] flex-col">
-              <div className="min-h-0 flex-1">
-                <WorkspaceSidebar activeSection={activeSection} apiOperationCount={endpoints.length} onNavigate={navigateTo} collapsed={leftCollapsed} />
+        {!isDocumentation && (
+          <aside className="hidden border-r border-sidebar-border md:block">
+            <div className="xl:hidden">
+              <div className="sticky top-16 h-[calc(100vh-4rem)]">
+                <WorkspaceSidebar activeSection={activeSection} onNavigate={navigateTo} collapsed />
               </div>
-              <button
-                type="button"
-                onClick={toggleLeftCollapsed}
-                aria-label={leftCollapsed ? "Expand navigation" : "Collapse navigation"}
-                title={leftCollapsed ? "Expand navigation" : "Collapse navigation"}
-                className="flex shrink-0 items-center justify-center gap-2 border-t border-sidebar-border bg-sidebar py-2.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              >
-                {leftCollapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
-              </button>
             </div>
-          </div>
-        </aside>
+            <div className="hidden h-full xl:flex xl:flex-col">
+              <div className="sticky top-16 flex h-[calc(100vh-4rem)] flex-col">
+                <div className="min-h-0 flex-1">
+                  <WorkspaceSidebar activeSection={activeSection} onNavigate={navigateTo} collapsed={leftCollapsed} />
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleLeftCollapsed}
+                  aria-label={leftCollapsed ? "Expand navigation" : "Collapse navigation"}
+                  title={leftCollapsed ? "Expand navigation" : "Collapse navigation"}
+                  className="flex shrink-0 items-center justify-center gap-2 border-t border-sidebar-border bg-sidebar py-2.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                >
+                  {leftCollapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+                </button>
+              </div>
+            </div>
+          </aside>
+        )}
 
         <main className="min-w-0 p-4 sm:p-6 lg:p-8">
           {openApiQuery.isLoading && (
@@ -173,6 +186,10 @@ export default function Workspace() {
               catalogReady={endpoints.length > 0}
               onExplore={() => navigateTo("database")}
             />
+          ) : activeSection === "overview" ? (
+            <Suspense fallback={<ExplorerLoading label="Loading overview" />}>
+              <Overview />
+            </Suspense>
           ) : activeSection === "explorer" ? (
             <Suspense fallback={<ExplorerLoading />}>
               <Explorer />
@@ -212,11 +229,11 @@ export default function Workspace() {
   );
 }
 
-function ExplorerLoading() {
+function ExplorerLoading({ label = "Loading Explorer" }: { label?: string }) {
   return (
     <div className="flex min-h-[560px] items-center justify-center rounded-lg border border-border bg-surface text-sm text-muted-foreground">
       <Loader2 className="mr-2 size-4 animate-spin text-fabric" />
-      Loading Explorer
+      {label}
     </div>
   );
 }

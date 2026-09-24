@@ -1,17 +1,28 @@
 import { useIsFetching, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  BookOpen,
+  BookOpenCheck,
+  Check,
   CheckCircle2,
+  ChevronDown,
   CircleAlert,
   Loader2,
   Menu,
   RefreshCw,
 } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Link, useLocation } from "react-router";
 
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { ThemeToggle } from "~/components/theme-toggle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
   Sheet,
   SheetContent,
@@ -22,27 +33,40 @@ import {
 } from "~/components/ui/sheet";
 import { clearServerCache } from "~/lib/lineage-api";
 import { cn } from "~/lib/utils";
+import { isApiReferencePath } from "~/lib/workspace-routes";
 import { useAppStore } from "~/stores/app-store";
 
 const navigationItems = [
   { label: "Home", to: "/", match: (pathname: string) => pathname === "/" },
   {
+    label: "Workspace",
+    to: "/workspace/power-bi",
+    match: (pathname: string) => pathname.startsWith("/workspace") && !isApiReferencePath(pathname),
+  },
+];
+
+/** Reading material rather than working screens, grouped under "Documents". */
+const documentItems = [
+  {
     label: "Setup guide",
+    description: "Configure Microsoft, the database, and backend",
     to: "/setup-guide",
+    icon: BookOpenCheck,
     match: (pathname: string) => pathname.startsWith("/setup-guide"),
   },
   {
-    label: "Workspace",
-    to: "/workspace/power-bi",
-    match: (pathname: string) =>
-      pathname.startsWith("/workspace") && !pathname.startsWith("/workspace/api-docs"),
-  },
-  {
     label: "API reference",
+    description: "Browse and run the backend's operations",
     to: "/workspace/api-docs",
-    match: (pathname: string) => pathname.startsWith("/workspace/api-docs"),
+    icon: BookOpen,
+    match: isApiReferencePath,
   },
 ];
+
+const headerNavItemClass =
+  "relative flex items-center px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground lg:px-4";
+const headerNavItemActiveClass =
+  "text-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-fabric lg:after:inset-x-4";
 
 async function checkHealth(apiOrigin: string) {
   const response = await fetch(`${apiOrigin}/api/v1/health`, {
@@ -111,8 +135,10 @@ export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
     <header className="sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-sm">
       <div className="mx-auto flex min-h-16 max-w-screen-2xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex min-w-0 items-center gap-3" aria-label="PBI Lineage Explorer home">
-          <span className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-white">
-            <img src="/tab_logo.png" alt="" className="size-full object-cover" />
+          {/* Transparent logo mark; the dark-theme copy swaps its navy strokes for light slate. */}
+          <span className="flex size-9 shrink-0 items-center justify-center">
+            <img src="/tab_logo.png" alt="" width={36} height={36} className="size-full object-contain dark:hidden" />
+            <img src="/tab_logo-dark.png" alt="" width={36} height={36} className="hidden size-full object-contain dark:block" />
           </span>
           <span className="min-w-0">
             <span className="block truncate text-sm font-semibold text-foreground sm:text-base">
@@ -149,27 +175,18 @@ export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
             <SheetContent side="right" className="w-[min(22rem,88vw)] border-border p-0">
               <SheetHeader className="border-b border-border px-5 py-5">
                 <SheetTitle>Navigation</SheetTitle>
-                <SheetDescription>Move between guidance, setup, analysis, and APIs.</SheetDescription>
+                <SheetDescription>Move between the workspace and the reference documents.</SheetDescription>
               </SheetHeader>
               <nav aria-label="Mobile navigation" className="flex flex-col px-3 py-3">
-                {navigationItems.map((item) => {
-                  const active = item.match(pathname);
-                  return (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      aria-current={active ? "page" : undefined}
-                      className={cn(
-                        "border-l-2 px-4 py-3 text-sm font-medium transition-colors",
-                        active
-                          ? "border-fabric bg-accent text-accent-foreground"
-                          : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
-                      )}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
+                {navigationItems.map((item) => (
+                  <MobileNavigationLink key={item.to} item={item} active={item.match(pathname)} />
+                ))}
+                <p className="mt-4 mb-1 border-l-2 border-transparent px-4 text-[11px] font-semibold uppercase text-muted-foreground">
+                  Documents
+                </p>
+                {documentItems.map((item) => (
+                  <MobileNavigationLink key={item.to} item={item} active={item.match(pathname)} nested />
+                ))}
               </nav>
               {showHealth ? (
                 <div className="mt-auto border-t border-border p-5">
@@ -185,6 +202,32 @@ export function AppHeader({ showHealth = true }: { showHealth?: boolean }) {
   );
 }
 
+function MobileNavigationLink({
+  item,
+  active,
+  nested = false,
+}: {
+  item: { label: string; to: string };
+  active: boolean;
+  nested?: boolean;
+}) {
+  return (
+    <Link
+      to={item.to}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "border-l-2 py-3 text-sm font-medium transition-colors",
+        nested ? "pr-4 pl-7" : "px-4",
+        active
+          ? "border-fabric bg-accent text-accent-foreground"
+          : "border-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      {item.label}
+    </Link>
+  );
+}
+
 function HeaderNavigation({ pathname }: { pathname: string }) {
   return (
     <nav aria-label="Primary navigation" className="flex items-stretch">
@@ -195,16 +238,80 @@ function HeaderNavigation({ pathname }: { pathname: string }) {
             key={item.to}
             to={item.to}
             aria-current={active ? "page" : undefined}
-            className={cn(
-              "relative flex items-center px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground lg:px-4",
-              active && "text-foreground after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:bg-fabric lg:after:inset-x-4",
-            )}
+            className={cn(headerNavItemClass, active && headerNavItemActiveClass)}
           >
             {item.label}
           </Link>
         );
       })}
+      <DocumentsMenu pathname={pathname} />
     </nav>
+  );
+}
+
+/**
+ * Each item's accessible name stays exactly its label: the description is
+ * hidden from the name and attached as the item's description instead.
+ */
+function DocumentsMenu({ pathname }: { pathname: string }) {
+  const descriptionId = useId();
+  const active = documentItems.some((item) => item.match(pathname));
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cn(
+          headerNavItemClass,
+          "group cursor-pointer gap-1 data-popup-open:text-foreground",
+          active && headerNavItemActiveClass,
+        )}
+      >
+        Documents
+        <ChevronDown
+          aria-hidden="true"
+          className="size-3.5 transition-transform duration-200 group-data-popup-open:rotate-180"
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" sideOffset={6} className="w-96 p-1.5">
+        <DropdownMenuGroup>
+          {documentItems.map((item, index) => {
+            const current = item.match(pathname);
+            return (
+              <DropdownMenuItem
+                key={item.to}
+                render={<Link to={item.to} />}
+                aria-current={current ? "page" : undefined}
+                aria-describedby={`${descriptionId}-${index}`}
+                className={cn(
+                  "cursor-pointer items-start gap-3 px-2.5 py-2",
+                  current && "bg-accent/50 text-accent-foreground",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex size-8 shrink-0 items-center justify-center rounded-md border",
+                    current ? "border-fabric/30 bg-fabric/10 text-fabric" : "border-border bg-subtle text-muted-foreground",
+                  )}
+                >
+                  <item.icon className="size-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">{item.label}</span>
+                  <span
+                    id={`${descriptionId}-${index}`}
+                    aria-hidden="true"
+                    className="mt-0.5 block text-xs leading-snug text-muted-foreground"
+                  >
+                    {item.description}
+                  </span>
+                </span>
+                {current ? <Check className="mt-2 size-4 text-fabric" /> : null}
+              </DropdownMenuItem>
+            );
+          })}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

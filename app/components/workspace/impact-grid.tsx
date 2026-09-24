@@ -38,13 +38,16 @@ function CopyableCell({ value }: ICellRendererParams<GridRow>) {
   return <span className="group flex h-full min-w-0 items-center gap-1"><span className="min-w-0 truncate" title={text}>{abbreviate(text, 120)}</span><button type="button" aria-label="Copy cell value" title="Copy value" className="ml-auto hidden shrink-0 text-zinc-400 hover:text-teal-700 group-hover:inline-flex focus:inline-flex" onClick={(event) => void copyValue(event)}>{copied ? <CheckCircle2 className="size-3.5 text-emerald-700" /> : <Copy className="size-3.5" />}</button></span>;
 }
 
-export function ImpactGrid({ rowData, columnDefs, emptyMessage, exportFileName, exportContext }: {
+export function ImpactGrid({ rowData, columnDefs, emptyMessage, exportFileName, exportContext, fitRows = false }: {
   rowData: GridRow[];
   columnDefs: ColDef<GridRow>[];
   emptyMessage: string;
   exportFileName: string;
   exportContext: ExportContext;
+  /** Shrink to the rows present (never below three rows or above the default 420px) instead of a fixed height. */
+  fitRows?: boolean;
 }) {
+  const gridHeight = fitRows ? Math.min(420, 40 + Math.max(rowData.length, 3) * 42 + 2) : 420;
   const [tableCopied, setTableCopied] = useState(false);
 
   async function copyTable() {
@@ -62,8 +65,9 @@ export function ImpactGrid({ rowData, columnDefs, emptyMessage, exportFileName, 
         <Button type="button" variant="outline" size="sm" title="Download Excel-compatible file" disabled={!rowData.length} onClick={() => downloadExcel(rowData, exportContext, exportFileName)}><FileSpreadsheet className="size-3.5" /> Excel</Button>
       </div>
     </div>
-    <div className="h-[420px] min-w-[720px]">
-      <AgGridReact<GridRow> theme={impactGridTheme} rowData={rowData} columnDefs={columnDefs} defaultColDef={{ sortable: true, resizable: true, minWidth: 110, cellRenderer: CopyableCell }} rowHeight={42} headerHeight={40} suppressCellFocus={false} enableCellTextSelection ensureDomOrder overlayNoRowsTemplate={`<span class="ag-overlay-no-rows-center">${emptyMessage}</span>`} />
+    <div className="min-w-[720px]" style={{ height: gridHeight }}>
+      {/* AG Grid reads overlayNoRowsTemplate once; the key rebuilds it when the empty message changes (e.g. loading -> none found). */}
+      <AgGridReact<GridRow> key={emptyMessage} theme={impactGridTheme} rowData={rowData} columnDefs={columnDefs} defaultColDef={{ sortable: true, resizable: true, minWidth: 110, cellRenderer: CopyableCell }} rowHeight={42} headerHeight={40} suppressCellFocus={false} enableCellTextSelection ensureDomOrder overlayNoRowsTemplate={`<span class="ag-overlay-no-rows-center">${emptyMessage}</span>`} />
     </div>
   </div>;
 }

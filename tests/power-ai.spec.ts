@@ -88,6 +88,9 @@ test.describe("Power AI — context and Ask Power AI", () => {
     await mockTableImpactBackend(page);
     await page.goto("/workspace/table-impact");
     await expect(page.getByRole("heading", { name: "Table impact" })).toBeVisible({ timeout: 60_000 });
+    // Table impact starts with nothing selected; Ask Power AI appears once one table is picked.
+    await expect(page.getByRole("button", { name: "Ask Power AI" })).toHaveCount(0);
+    await selectSemanticTable(page, "Sales");
     await expect(page.getByRole("button", { name: "Ask Power AI" })).toBeVisible();
 
     await page.getByRole("button", { name: "Ask Power AI" }).click();
@@ -108,6 +111,8 @@ test.describe("Power AI — context and Ask Power AI", () => {
     });
 
     await page.goto("/workspace/table-impact");
+    await expect(page.getByRole("heading", { name: "Table impact" })).toBeVisible({ timeout: 60_000 });
+    await selectSemanticTable(page, "Sales");
     await page.getByRole("button", { name: "Ask Power AI" }).click();
     await page.getByRole("button", { name: "Send message" }).click();
 
@@ -979,6 +984,19 @@ async function mockAiStatus(page: Page, response: { status: number; json: unknow
   await page.route("**/openapi.json", (route) => route.fulfill({ json: { openapi: "3.1.0", info: { title: "PBI Lineage", version: "1" }, paths: {} } }));
   await page.route("**/api/v1/health", (route) => route.fulfill({ json: { status: "ok" } }));
   await page.route("**/api/v1/ai/status", (route) => route.fulfill({ status: response.status, json: response.json }));
+}
+
+/** Picks one semantic model table in Table impact's single "Tables" search, then closes the list. */
+async function selectSemanticTable(page: Page, tableName: string) {
+  await page.getByRole("button", { name: "Tables", exact: true }).click();
+  await page.getByPlaceholder("Search semantic model or database tables...").fill(tableName);
+  await page
+    .getByRole("group", { name: /^Semantic model tables/ })
+    .getByRole("option")
+    .filter({ has: page.getByText(tableName, { exact: true }) })
+    .click();
+  await expect(page.getByRole("list", { name: "Selected tables" }).getByRole("listitem")).toHaveCount(1);
+  await page.getByRole("button", { name: "Done", exact: true }).click();
 }
 
 async function mockTableImpactBackend(page: Page) {

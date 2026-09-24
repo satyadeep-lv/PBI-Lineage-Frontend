@@ -17,7 +17,7 @@ import { cn } from "~/lib/utils";
 
 import { estimateLineageNodeHeight, layoutWithElk, LINEAGE_NODE_WIDTH } from "./lineage-layout";
 import { LINEAGE_NODE_TYPES } from "./lineage-node";
-import type { LineageDirection, LineageFlowNode, LineageGraph, LineageVerticalFlow } from "./lineage-types";
+import type { LineageDirection, LineageFlowNode, LineageGraph, LineageNodeKind, LineageVerticalFlow } from "./lineage-types";
 
 type CollapseDirection = "connected" | "upstream" | "downstream";
 
@@ -132,6 +132,8 @@ export type LineageDiagramProps = {
   rankSeparation?: number;
   animatedEdges?: boolean;
   edgeColor?: string;
+  /** Node kinds that start collapsed (each shows a +N badge) whenever the graph changes; the user can expand them. */
+  defaultCollapsedKinds?: LineageNodeKind[];
 };
 
 export function LineageDiagram({
@@ -148,9 +150,16 @@ export function LineageDiagram({
   rankSeparation,
   animatedEdges = false,
   edgeColor = "var(--text-muted)",
+  defaultCollapsedKinds,
 }: LineageDiagramProps) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
-  useEffect(() => setCollapsed(new Set()), [graph]);
+  // Keyed by content, not array identity, so an inline array prop does not reset the user's expansions every render.
+  const collapsedKindsKey = defaultCollapsedKinds?.join(",") ?? "";
+  const initialCollapsed = useCallback(() => {
+    const kinds = new Set(collapsedKindsKey.split(",").filter(Boolean));
+    return new Set(graph.nodes.filter((node) => kinds.has(node.kind)).map((node) => node.id));
+  }, [graph, collapsedKindsKey]);
+  const [collapsed, setCollapsed] = useState<Set<string>>(initialCollapsed);
+  useEffect(() => setCollapsed(initialCollapsed()), [initialCollapsed]);
   const toggle = useCallback((id: string) => setCollapsed((previous) => {
     const next = new Set(previous);
     if (next.has(id)) next.delete(id); else next.add(id);

@@ -14,13 +14,24 @@
 | `npx playwright test tests/report-lineage.spec.ts` | Report Lineage coverage only. |
 | `npx playwright test tests/impact-analysis.spec.ts` | Table and Measure Impact coverage only. |
 | `npx playwright test tests/scanner.spec.ts` | Scanner and Explorer scan-panel coverage only. |
-| `npx playwright test tests/home.spec.ts` | Home content, shared navigation, product image, and responsive UX only. |
+| `npx playwright test tests/home.spec.ts` | Home content, shared navigation, walkthrough image, and responsive UX only. |
+| `npx playwright test tests/navigation.spec.ts` | Header Home/Workspace/Documents navigation, mobile sheet, and workspace sidebar only. |
+| `npx playwright test tests/overview.spec.ts` | Overview totals, linked sections, filters, deep links, and degraded estate state only. |
 | `npx playwright test tests/setup-guide.spec.ts` | Setup Guide routing, content, navigation, references, screenshots, and responsive containment only. |
+| `node scripts/walkthrough/capture.cjs` | Capture fresh Home walkthrough frames from the dev server on `:5173`. |
+| `python scripts/walkthrough/compose.py` | Compose captured frames into the Home walkthrough GIFs and posters. |
 
 Run FastAPI first and verify `http://127.0.0.1:8000/docs`. Use
 `localhost:5173` consistently for the frontend. Stop the development server
 before running a production build so Vite is not watching the `build/`
 directory while React Router replaces it.
+
+Tailwind scans only `app/` for class names (`@import "tailwindcss" source(".")`
+in `app/app.css`). Editing `README.md`, `Docs/`, `scripts/`, or `tests/` while
+`npm run dev` runs therefore no longer forces a full page reload. Before this
+scoping, Tailwind scanned those files too, and the Vite plugin reloaded the
+page on every save because it cannot hot-update them. Keep class names in
+files under `app/`; one written only elsewhere is not generated.
 
 ## Browser Testing
 
@@ -32,15 +43,22 @@ session:
   metadata, secret clearing, and responsive containment.
 - `report-lineage.spec.ts`: report selection, evidence tabs, exports, directed
   report/column/calculation graphs, and mobile layout.
-- `impact-analysis.spec.ts`: workspace scope, searchable table/measure pickers,
-  upstream/downstream traversal, collapse behavior, grids, and degraded
-  evidence notices.
+- `impact-analysis.spec.ts`: Table Impact's grouped multi-select table
+  search and multi-model results; Measure Impact's workspace scope, measure
+  search, and upstream/downstream traversal; the impact graphs, grids, and
+  degraded evidence notices.
 - `scanner.spec.ts`: scan submission, Running-to-Succeeded polling, result
   browsing, and Explorer's explicit one-workspace enrichment.
-- `home.spec.ts`: Home content, one primary action, database-neutral copy,
-  product image loading, shared navigation, no health request, and containment.
+- `home.spec.ts`: Home content, the Start exploring and Setup guide actions,
+  database-neutral copy, walkthrough image loading, header navigation
+  including the Documents menu, no health request, and containment.
+- `navigation.spec.ts`: header Home/Workspace/Documents links and active
+  states, the grouped mobile sheet, and the workspace sidebar's items.
+- `overview.spec.ts`: Overview totals, the three linked sections and their
+  filters, Explorer deep links, and the estate-discovery failure state.
 - `setup-guide.spec.ts`: guide-route content, authoritative reference links,
-  navigation to Home/workspace, page errors, and desktop/mobile containment.
+  reaching the guide from the Documents menu and Home, page errors, and
+  desktop/mobile containment.
 
 Use an authenticated tenant for final provider acceptance. Mocked tests cannot
 prove Power BI/Fabric permissions, XMLA capacity, real scan payload quality, or
@@ -49,6 +67,25 @@ production cookie behavior. Generated test output is ignored under
 
 Vitest and React Testing Library remain installed for future unit/component
 suites; no such suite is currently committed.
+
+## Home Walkthrough Assets
+
+The Home page's animated walkthrough (`public/how-to-use-light.gif`,
+`public/how-to-use-dark.gif`, and a still PNG poster for each, shown under
+reduced motion) is generated from the running app, never from tenant data.
+Regenerate it after a visible UI change:
+
+1. Start the dev server (`npm run dev`) so the app answers on
+   `http://localhost:5173`.
+2. `node scripts/walkthrough/capture.cjs` serves the fictional estate from
+   `scripts/walkthrough/mock-backend.cjs`, clicks through each tab in light and
+   dark themes, and writes frames to `scripts/walkthrough/.frames/`
+   (gitignored).
+3. `python scripts/walkthrough/compose.py` (Python 3 with Pillow) composes
+   those frames into the two GIFs and their posters under `public/`.
+
+Commit the regenerated files under `public/`; the frames stay local. The
+scripts are development tooling and are not part of `build/client`.
 
 ## Production Build
 
@@ -102,13 +139,18 @@ Swagger UI.
 
 ## Verification Checklist
 
-1. `/` loads Home and `/setup-guide` loads directly without a Node process.
-2. Report Lineage, Table Impact, Measure Impact, and Scanner survive hard
-   refreshes.
+1. `/` loads Home with its walkthrough animation, and `/setup-guide` loads
+   directly without a Node process.
+2. Overview, Report Lineage, Table Impact, Measure Impact, and Scanner survive
+   hard refreshes, and an Explorer deep link such as
+   `/workspace/explorer?workspace=<id>` opens that workspace.
 3. `/api/v1/health/live` and `/openapi.json` return through IIS.
 4. Power BI authentication sets and reuses the backend HTTP-only cookie.
-5. API documentation executes a harmless health/status GET.
-6. Clipboard, CSV, and Excel-compatible exports work.
+5. The API reference executes a harmless health/status GET.
+6. Clipboard, CSV, and Excel-compatible exports work, including Table
+   Impact's four result grids after selecting a table and Measure Impact's
+   six grids after selecting a measure, and the impact graph expands a
+   collapsed report to its visuals.
 7. The footer contains the required developer and copyright text.
 8. `C:\pbi-lineage\frontend\current-release.txt` records the deployed SHA.
 
@@ -127,13 +169,20 @@ session IDs, or API keys in frontend environment variables or Git.
 - Never expose FastAPI port 8000 publicly.
 - The administrative key stays ephemeral and has no visible frontend input.
 - Service-principal and Snowflake secrets are cleared after submission.
-- API documentation performs real state-changing requests; review the method
+- The API reference performs real state-changing requests; review the method
   and body before execution.
 - Scanner runs are explicit and consume real Microsoft tenant quotas.
 - Live provider acceptance requires the appropriate Power BI/Fabric/XMLA
   permissions and cannot be replaced by mocked browser tests.
 - Table/Measure Impact currently caps cross-report evidence at 300 report
   bindings per model and labels truncation in the UI.
+- Report and visual usage comes only from `visual-source-lookup`: a report
+  counts when one of its visuals reads an impacted object. A report that is
+  bound to the model but shows none of those objects is not listed.
+- The impact graph draws at most 40 reports and 120 visuals and says how many
+  it left out; the grids always list every one.
+- Table Impact lists a database table only when a parsed semantic model
+  definition reports it as a `source_path`.
 - Orval, Vitest, and React Testing Library are installed, but no generated
   client or unit/component suite is committed.
 

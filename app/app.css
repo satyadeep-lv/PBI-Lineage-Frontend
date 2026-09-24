@@ -1,4 +1,9 @@
-@import "tailwindcss";
+/*
+ * Scan only app/ for class names. Tailwind otherwise scans the whole repo and
+ * forces a full page reload whenever a non-module file it scanned (README,
+ * Docs/*.md, scripts/*.py) is saved while the dev server runs.
+ */
+@import "tailwindcss" source(".");
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";

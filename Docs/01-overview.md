@@ -10,29 +10,43 @@ and is built for static hosting in IIS.
 
 The frontend turns the backend's API surface into guided operational views:
 
+- Show how the application works on Home through an animated walkthrough of
+  its screens, in light and dark versions.
 - Present a static setup guide for Entra registration, Power BI/Fabric tenant
   access, Scanner metadata, source-system authentication, backend environment
-  policy, and verification from global and workspace navigation.
+  policy, and verification, reached from the header's Documents menu and the
+  Home page.
 - Authenticate Power BI and Fabric via Microsoft device code or service
   principal.
 - Create and inspect an optional source-system session through the current
   Snowflake connector.
+- Summarize the estate on an Overview page: totals of accessible workspaces,
+  reports, and semantic models, then three linked lists that open each item
+  in Explorer.
 - Browse Power BI workspaces, reports, and semantic models by name.
 - Inspect report pages, semantic objects, DAX, source paths, and XMLA
   evidence.
 - Map physical database columns to semantic columns and calculations.
 - Trace report, Snowflake table/column, measure, and calculated-column lineage
   by depth through shared ELK/React Flow diagrams.
-- Analyze table/column impact and measure impact across a selected workspace
-  scope, including downstream/upstream calculations and report/visual usage.
+- Analyze table impact: search every semantic model table, and the database
+  tables behind them, across all workspaces, pick any number, and see the
+  reports, visuals, semantic models, and measures that use them in one impact
+  graph and four copyable, downloadable grids.
+- Analyze measure impact across a selected workspace scope: the tables the
+  measure reads and the tables holding calculations built on it, the other
+  measures it impacts, its semantic model, the reports and visuals that show
+  it or an impacted measure, and the inputs it reads, in the same impact graph
+  and six copyable, downloadable grids.
 - Run the explicit Power BI Admin scanner for one to 100 workspaces and browse
   dashboards, semantic metadata, dependencies, M expressions, and datasource
-  instances.
+  instances. The Scanner page is reached at `/workspace/scanner` (it is not in
+  the workspace sidebar); Explorer's Assets & access tab scans one workspace.
 - Copy individual table values or full tables (AG Grid) for analysis.
 - Download table data as CSV or Excel-compatible `.xls` with parent
   workspace/report/semantic-model context baked in.
-- Browse and execute every FastAPI OpenAPI operation from an in-app API
-  documentation/execution workbench.
+- Browse and execute every FastAPI OpenAPI operation from the in-app API
+  reference/execution workbench under the header's Documents menu.
 
 ## Ownership boundary
 
@@ -56,18 +70,18 @@ The two communicate only over HTTP.
 | UI | React 19 | Component rendering and local interaction state. |
 | Framework | React Router 8, Framework Mode, SPA (`ssr: false`) | Route definitions, build, metadata, error boundary. |
 | Build | Vite 8 | Dev server, dependency prebundling, dev proxy, production bundling. |
-| Styling | Tailwind CSS 4 | Utility styling and design tokens (`app/app.css`). |
-| Components | shadcn/ui on Base UI (`@base-ui/react`) | Accessible buttons, inputs, dialogs, sheets, search commands, and selects. |
+| Styling | Tailwind CSS 4 | Utility styling and design tokens (`app/app.css`). Class names are scanned from `app/` only. |
+| Components | shadcn/ui on Base UI (`@base-ui/react`) | Accessible buttons, inputs, dialogs, sheets, dropdown menus, search commands, and selects. |
 | Icons | Lucide React | Interface icons. |
 | Server state | TanStack Query v5 | API caching, loading/error states, invalidation. |
 | UI state | Zustand | API origin + ephemeral admin-key state (`app/stores/app-store.ts`). |
-| Graphs | XYFlow / React Flow plus `elkjs` | Worker-laid-out, directed, draggable, collapsible report and impact diagrams. |
+| Graphs | XYFlow / React Flow plus `elkjs` | Worker-laid-out, directed, draggable, collapsible report, Snowflake, and impact diagrams. |
 | Tables | AG Grid Community | Sortable/filterable analysis tables, cell/table copy. |
 | Forms | React Hook Form + Zod | Setup form state and validation. |
 | API catalog | Runtime OpenAPI parser (`app/lib/api-catalog.ts`) | Discovers and groups live FastAPI operations — no generated client. |
 | API generation | Orval (installed, unused) | Available for a future generated client; nothing generated is committed. |
 | Unit tests | Vitest + React Testing Library (installed, unused) | Dependencies ready; no unit suites committed yet. |
-| E2E | Playwright | Home, Setup Guide, API workbench, report-lineage, impact-analysis, and scanner coverage. |
+| E2E | Playwright | Home, navigation, Overview, Setup Guide, API workbench, report-lineage, impact-analysis, and scanner coverage. |
 | Production frontend | IIS static site on Windows Azure VM | Versioned releases, SPA fallback, and API reverse proxy. |
 | Production backend | Windows Docker deployment on the same VM | FastAPI built and operated independently behind IIS. |
 

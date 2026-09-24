@@ -36,15 +36,17 @@ test.describe("desktop app shell", () => {
     await expect(page.getByRole("heading", { name: "Power AI", exact: true })).toBeVisible();
 
     // Wide desktop keeps all three columns visible: opening Power AI gives it
-    // dedicated width instead of obscuring the workspace canvas.
-    const mainWidthOpen = await mainCanvasWidth(page);
+    // dedicated width instead of obscuring the workspace canvas. The canvas
+    // eases into its narrower width (a short margin transition), so wait for it
+    // to settle rather than reading the first frame.
+    await expect.poll(() => mainCanvasWidth(page)).toBeLessThan(mainWidthClosed);
+    const mainWidthOpen = await settledMainCanvasWidth(page);
     expect(mainWidthOpen).toBeLessThan(mainWidthClosed);
 
     // Left nav collapse still resizes the canvas independently, unaffected by Power AI.
     await page.getByRole("button", { name: "Collapse navigation" }).click();
     await expect(page.getByRole("button", { name: "Expand navigation" })).toBeVisible();
-    const mainWidthNavCollapsed = await mainCanvasWidth(page);
-    expect(mainWidthNavCollapsed).toBeGreaterThan(mainWidthOpen);
+    await expect.poll(() => mainCanvasWidth(page)).toBeGreaterThan(mainWidthOpen);
   });
 
   test("theme selection supports dark, light, and persisted system preference", async ({ page }) => {
@@ -121,6 +123,18 @@ test.describe("mobile app shell", () => {
 
 async function mainCanvasWidth(page: Page) {
   return page.locator("main").first().evaluate((element) => element.getBoundingClientRect().width);
+}
+
+/** The canvas width once two readings a transition-length apart agree. */
+async function settledMainCanvasWidth(page: Page) {
+  let previous = await mainCanvasWidth(page);
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await page.waitForTimeout(250);
+    const current = await mainCanvasWidth(page);
+    if (Math.abs(current - previous) < 0.5) return current;
+    previous = current;
+  }
+  throw new Error(`Main canvas width never settled (last reading ${previous}px)`);
 }
 
 async function mockShellBackend(page: Page) {

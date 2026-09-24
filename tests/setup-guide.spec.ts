@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
+  await page.route("**/openapi.json", (route) => route.fulfill({ json: { openapi: "3.1.0", info: { title: "PBI Lineage", version: "1" }, paths: {} } }));
   await page.route("**/api/v1/health", (route) => route.fulfill({ json: { status: "ok" } }));
+  await page.route("**/api/v1/ai/status", (route) => route.fulfill({ json: { enabled: true, configured: true, streaming_enabled: true } }));
 });
 
 test("setup guide is available from navigation and leads into the application", async ({ page }) => {
@@ -33,8 +35,12 @@ test("setup guide is available from navigation and leads into the application", 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { name: "PBI Lineage Explorer" })).toBeVisible();
 
+  // The workspace sidebar no longer links the guide; the header's Documents menu does.
   await page.goto("/workspace/power-bi");
-  await page.getByRole("button", { name: "Setup guide Start", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Connect Power BI and Fabric" })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("navigation", { name: "Workspace navigation" }).getByRole("button", { name: /Setup guide/ })).toHaveCount(0);
+  await page.getByRole("navigation", { name: "Primary navigation" }).getByRole("button", { name: "Documents", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Setup guide", exact: true }).click();
   await expect(page).toHaveURL(/\/setup-guide$/);
   await expect(page.getByRole("heading", { name: "Set up PBI Lineage Explorer" })).toBeVisible();
   expect(browserErrors).toEqual([]);

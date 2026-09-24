@@ -1,4 +1,3 @@
-import { Workflow } from "lucide-react";
 import { Link } from "react-router";
 
 const footerLinks = [
@@ -14,7 +13,8 @@ export function AppFooter() {
       <div className="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-center sm:justify-between">
           <Link to="/" className="flex items-center gap-2 text-foreground">
-            <Workflow className="size-4 text-fabric" />
+            <img src="/tab_logo.png" alt="" width={20} height={20} className="size-5 object-contain dark:hidden" />
+            <img src="/tab_logo-dark.png" alt="" width={20} height={20} className="hidden size-5 object-contain dark:block" />
             <span className="text-sm font-medium">PBI Lineage Explorer</span>
           </Link>
           <nav aria-label="Footer navigation" className="flex flex-wrap gap-x-5 gap-y-3 text-xs">

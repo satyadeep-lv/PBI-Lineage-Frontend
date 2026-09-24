@@ -1,11 +1,8 @@
 import {
-  BookOpen,
-  BookOpenCheck,
   Database,
   GitBranch,
-  Home,
   KeyRound,
-  Radar,
+  LayoutDashboard,
   SearchCheck,
   Sigma,
   TableProperties,
@@ -25,32 +22,22 @@ export type ApiGroupSummary = {
 /**
  * The one nav-content implementation reused as the desktop `<aside>` (full or
  * collapsed to an icon rail), the tablet icon rail, and inside the mobile Sheet
- * — only `collapsed` changes, never the nav logic or item list.
+ * — only `collapsed` changes, never the nav logic or item list. API reference
+ * lives under the header's Documents menu, so it has no entry here.
  */
 export function WorkspaceSidebar({
   activeSection,
-  apiOperationCount,
   onNavigate,
   collapsed = false,
 }: {
   activeSection: string;
-  apiOperationCount: number;
   onNavigate: (section: string) => void;
   collapsed?: boolean;
 }) {
-  const documentationActive =
-    activeSection === "api-docs" ||
-    !["power-bi", "database", "explorer", "report-lineage", "table-impact", "measure-impact", "scanner"].includes(activeSection);
-
   return (
     <TooltipProvider delay={200}>
       <nav aria-label="Workspace navigation" className="flex h-full min-h-0 flex-col bg-sidebar text-sidebar-foreground">
         <div className={cn("min-h-0 flex-1 overflow-y-auto overflow-x-hidden", collapsed ? "p-2" : "p-4")}>
-          <div className="mb-5 space-y-1">
-            <NavigationItem collapsed={collapsed} active={false} icon={BookOpenCheck} label="Setup guide" meta="Start" onClick={() => onNavigate("setup-guide")} />
-            <NavigationItem collapsed={collapsed} active={false} icon={Home} label="Overview" meta="" onClick={() => onNavigate("home")} />
-          </div>
-
           <SidebarLabel collapsed={collapsed}>Setup</SidebarLabel>
           <div className="space-y-1">
             <NavigationItem collapsed={collapsed} active={activeSection === "power-bi"} icon={KeyRound} label="Power BI" meta="Step 1" onClick={() => onNavigate("power-bi")} />
@@ -59,27 +46,12 @@ export function WorkspaceSidebar({
 
           <Separator className="my-5" />
 
-          <SidebarLabel collapsed={collapsed}>Explore</SidebarLabel>
           <div className="space-y-1">
+            <NavigationItem collapsed={collapsed} active={activeSection === "overview"} icon={LayoutDashboard} label="Overview" meta="Access" onClick={() => onNavigate("overview")} />
             <NavigationItem collapsed={collapsed} active={activeSection === "explorer"} icon={SearchCheck} label="Explorer" meta="Inventory" onClick={() => onNavigate("explorer")} />
             <NavigationItem collapsed={collapsed} active={activeSection === "report-lineage"} icon={GitBranch} label="Report lineage" meta="Reports" onClick={() => onNavigate("report-lineage")} />
             <NavigationItem collapsed={collapsed} active={activeSection === "table-impact"} icon={TableProperties} label="Table impact" meta="Impact" onClick={() => onNavigate("table-impact")} />
             <NavigationItem collapsed={collapsed} active={activeSection === "measure-impact"} icon={Sigma} label="Measure impact" meta="Impact" onClick={() => onNavigate("measure-impact")} />
-            <NavigationItem collapsed={collapsed} active={activeSection === "scanner"} icon={Radar} label="Scanner" meta="Admin" onClick={() => onNavigate("scanner")} />
-          </div>
-
-          <Separator className="my-5" />
-
-          <SidebarLabel collapsed={collapsed}>Reference</SidebarLabel>
-          <div className="space-y-1">
-            <NavigationItem
-              collapsed={collapsed}
-              active={documentationActive}
-              icon={BookOpen}
-              label="API documentation"
-              meta={apiOperationCount ? String(apiOperationCount) : ""}
-              onClick={() => onNavigate("api-docs")}
-            />
           </div>
         </div>
       </nav>

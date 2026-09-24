@@ -6,12 +6,15 @@
 | --- | --- | --- |
 | Backend health | TanStack Query in `AppHeader` | Refetched every 15 seconds. |
 | OpenAPI document | TanStack Query in `workspace.tsx` | Browser query cache keyed by API origin. |
-| Explorer/Report/Impact data | TanStack Query | Selection or workspace-scope cache with feature-specific stale times. |
+| Overview/Explorer/Report/Impact data | TanStack Query | Selection or workspace-scope cache with feature-specific stale times. |
+| Explorer selection | Explorer component state, seeded once from `?workspace`, `?report`, `?model` | Current Explorer mount; later selections do not rewrite the URL. |
+| Table Impact selection | `TableImpact` component state (selected semantic and database table keys) | Current mount; picks missing from a refreshed inventory are dropped. Not in the URL. |
+| Measure Impact scope and measure | `MeasureImpact` component state | Current mount; the scope defaults to every workspace and the measure to the first indexed one, which also replaces a pick missing from a refreshed inventory. Not in the URL. |
 | Scanner ID/status/result | `useWorkspaceScan` plus TanStack Query | Current component/scope; polling ends at a terminal status. |
 | API execution result | `useApiExecutor` local state | Current workspace route mount. |
 | API origin | Zustand | In-memory page lifetime, initialized from `VITE_API_ORIGIN`. |
 | Administrative key | Zustand | Ephemeral memory only; no persistence or visible field. |
-| Diagram collapse state | `LineageDiagram` local state | Current graph; resets when graph identity changes. |
+| Diagram collapse state | `LineageDiagram` local state | Current graph; resets when graph identity changes, to the node kinds in `defaultCollapsedKinds` (report nodes in the impact graph) or to fully expanded. |
 | Form input | React Hook Form or component state | Current component mount. |
 | Power BI/Snowflake session | FastAPI cookie/session | Backend-controlled lifetime. |
 | Power AI conversation and context | Zustand (`power-ai-store.ts`) | In-memory page lifetime; the backend keeps the conversation's last turns by `conversation_id`. Each message keeps its question, `focus` and answer time; `contextChangedAt`, `expanded` and `queuedQuestion` drive the context chip, the widen toggle and the measure panel's follow-ups. Nothing is persisted. |
@@ -28,13 +31,43 @@ written to disk.
 
 `app/lib/query-provider.tsx` creates one `QueryClient` for the application.
 Feature-local queries use descriptive array keys. Shared semantic and estate
-evidence uses `parsedSemanticModelKey`, `daxAnalysisKey`, and
-`estateDiscoveryKey` from `lineage-api.ts`, allowing compatible requests from
-Explorer, Report Lineage, Table Impact, and Measure Impact to reuse cache.
+evidence uses `workspaceListKey`, `parsedSemanticModelKey`, `daxAnalysisKey`,
+and `estateDiscoveryKey` from `lineage-api.ts`, allowing compatible requests
+from Overview, Explorer, Report Lineage, Table Impact, and Measure Impact to
+reuse cache. Overview reads only the `workspaceListKey` and
+`estateDiscoveryKey` entries (with `WORKSPACE_LIST_PATH` and
+`ESTATE_DISCOVER_PATH`), so it never issues per-workspace requests and adds
+nothing when another page has already loaded them.
+
+Table Impact builds its inventory under `estateInventoryKey` for every listed
+workspace, the same entry Measure Impact reads at its default all-workspaces
+scope. It runs one `daxAnalysisKey` query for each semantic model the
+selection touches (`useQueries`), so a model already analyzed by Measure
+Impact or by an earlier selection is not posted again. Its bound-report
+evidence uses a page-local key per model built by `impactEvidenceKey`
+(`["table-impact", "visual-evidence", apiOrigin, semanticModelId, reportIds]`),
+and estate discovery is enabled only once a table is selected.
+
+Measure Impact reads the same `estateInventoryKey` for its chosen scope, one
+`daxAnalysisKey` query for the selected measure's model, and its own evidence
+key (`["measure-impact", "visual-evidence", ...]`); estate discovery is
+enabled once a measure is selected. The `visual-evidence` segment keeps these
+entries apart from the older two-call evidence shape. Each is one
+`visual-source-lookup` query per model, batched by `fetchBatchedExplorer`.
 
 Authentication success invalidates identity-dependent queries. Logout removes
 them so one identity's tenant metadata is not displayed after another identity
 connects.
+
+## Navigation Helpers
+
+`app/lib/workspace-routes.ts` is the one place that decides which
+`/workspace/:section` slugs are working screens. `WORKSPACE_SECTIONS` lists
+them; `isApiReferencePath` treats every other `/workspace/<slug>` as the API
+reference, which drives the header's Workspace/Documents active state and the
+shell's full-width API reference layout. `explorerHref` builds Explorer deep
+links (`/workspace/explorer?workspace=...&report=...&model=...`) from IDs.
+Explorer reads those params once on mount; there is no other URL state.
 
 ## Runtime API Catalog
 
@@ -70,17 +103,59 @@ impact, and scanner calls. It also implements:
 - Generic chunking and concurrency-limited mapping.
 - `fetchBatchedExplorer`, respecting 50 reports per request and the frontend's
   current 300-report evidence cap.
-- `fetchEstateInventory`, which lists and parses models across a selected
-  workspace scope while recording inaccessible models instead of rejecting the
-  entire inventory.
+- `fetchEstateInventory`, which lists and parses models across a workspace
+  scope (every listed workspace for Table Impact, the picked scope for Measure
+  Impact) while recording inaccessible models instead of rejecting the entire
+  inventory. Its `parsedByModel` map is reused as the `dax/analyze` request
+  body. Both impact pages also read each table's and column's `source_path`
+  from it, through `SourcedTable` in `app/lib/impact-analysis.ts`, because
+  the shared `ParsedTable` type omits that field.
+
+## Impact Evidence
+
+`app/lib/impact-analysis.ts` is the evidence layer Table Impact and Measure
+Impact share:
+
+- `fetchImpactEvidence(apiOrigin, bound)` posts a model's bound reports to
+  `POST /api/v1/explorer/visual-source-lookup` through `fetchBatchedExplorer`.
+  `VisualSourceLookupRow` types only the fields the pages read (report,
+  workspace, page, and visual names and IDs, `visual_type`, `semantic_table`,
+  `semantic_object_name`, `match_status`). `measure-source-lineage` is
+  deliberately not called: it lists every model measure for every bound
+  report whether or not a visual shows it, which over-counted report usage.
+- `impactEvidenceKey(page, apiOrigin, semanticModelId, bound)` returns
+  `[page, "visual-evidence", apiOrigin, semanticModelId, reportIds]`.
+- `buildEvidenceIndex(data)` indexes matched rows by `evidenceKey(table,
+  name)` into `byObject` (report IDs and visual keys per semantic object),
+  `reports` (name and workspace), and `visuals` (page name, visual name, and
+  type, keyed by `visualKey(reportId, pageId, visualId)`).
+- `buildReportNames(estate, indexes)` names reports from `EstateWithReports`
+  first and fills ID-only names from the evidence.
+- `tableSources`, `tableSeeds`, and `displayType` turn a `SourcedTable` into
+  its physical sources, its whole-table closure seeds, and readable type
+  labels.
+
+`app/components/workspace/impact-lineage.tsx` turns that evidence and a DAX
+closure into the shared impact graph (`buildImpactGraph`, one
+`ImpactGraphScope` per model) and renders it (`ImpactLineageDiagram`); see
+[03-features-and-data-flows.md](03-features-and-data-flows.md#impact-graph).
+`app/components/workspace/impact-ui.tsx` supplies the presentational pieces
+both pages use: `SummaryTile` (with a "Still checking" spinner),
+`ImpactSection`, `StatusBand`, `EvidenceStatus`, `LoadingState`, and
+`EmptyState`. `EvidenceStatus` checks, in order, estate failure, estate
+loading ("Finding the reports bound to these semantic models..."), no bound
+reports, evidence loading, the 300-report cap, and success, so the page never
+claims "no reports bound" before estate discovery has answered.
 
 ## Dependency Traversal
 
 `app/lib/dependency-graph.ts` performs multi-source breadth-first traversal over
 the flat DAX dependency response. `computeDependencyClosure` supports upstream,
-downstream, and bidirectional analysis with depth/directness/reference evidence;
-`closureToLineageGraph` converts the closure to the renderer-independent graph
-used by ELK and React Flow.
+downstream, and bidirectional analysis with depth/directness/reference evidence.
+In each `DaxDependency`, `source` is the referenced object and `target` the one
+whose expression reads it. `closureToLineageGraph` converts a closure to the
+renderer-independent graph for Report Lineage's calculation diagrams; the
+impact pages build theirs with `buildImpactGraph` instead.
 
 ## Scanner API
 
@@ -92,13 +167,52 @@ forces `get_artifact_users: false`.
 four seconds, stops at `Succeeded` or `Failed`, and enables one immutable result
 fetch only after success. Scanner activity is never automatic.
 
+## Impact Pickers
+
+`app/components/workspace/impact-picker.tsx` holds three controlled pickers.
+Each keeps only its open state and filter text locally, and the page owns the
+selection:
+
+- `WorkspaceScopeSelect`: a workspace multi-select with Select all/Clear, used
+  by Measure Impact and Scanner.
+- `ObjectSearchSelect`: a single-select `Command` combobox over
+  `SearchEntry` items, used by Measure Impact.
+- `MultiObjectSearch`: one search box over several `SearchGroup`s (heading,
+  chip label, entries), used by Table Impact. It turns off cmdk filtering and
+  matches every typed word against each entry's `searchValue` itself, so a
+  match beyond the visible rows is still found. Matches are then ranked by
+  `matchRank`, which compares the entry's `primary` name with the whole
+  query: 0 exact name, 1 name prefix, 2 a name segment (split on spaces,
+  `.`, `_`, brackets, parentheses, and `-`) starts with it, 3 the name
+  contains it, 4 only other text matched. Ties keep the group's own order.
+  Ranking happens before the cap, and each group shows its first 100
+  matches, with the groups as side-by-side columns. It returns the selected
+  keys through `onChange`. Picks render as removable chips; the list is
+  labeled `Selected <label>` (label lowercased, for example "Selected
+  tables") and each button `Remove <name>`.
+
+`SearchEntry` has an optional `chipText`, the chip and remove-button text to
+use when `primary` alone is ambiguous. Table Impact sets it to
+`Table (Model)` for semantic tables, so a chip reads `Sales (Sales Model)` and
+its button `Remove Sales (Sales Model)`. The chip's tooltip shows
+`primary — secondary`.
+
 ## Copy And Export
 
 `app/lib/grid-export.ts` enriches rows with parent context, preserves complete
 cell values such as DAX, creates tab-separated clipboard text, and generates
-CSV/Excel-compatible downloads. `ImpactGrid` applies those helpers to impact
-and scanner views; Explorer and Report Lineage provide equivalent copy/export
-behavior in their local grids.
+CSV/Excel-compatible downloads. Every row field except `id` is exported, so a
+field the grid does not show as a column still reaches copies and files.
+Both impact pages rely on this for report, visual, semantic-model, and
+workspace IDs. `ImpactGrid` applies those helpers to impact and scanner views.
+By default it is a fixed 420 px tall; its optional `fitRows` prop shrinks it
+to the rows present, between three rows and 420 px, as the stacked grids on
+Table Impact (four) and Measure Impact (six) do. AG Grid reads
+`overlayNoRowsTemplate` only once, so `ImpactGrid` keys `AgGridReact` by
+`emptyMessage`. When the message changes, for example from "Checking
+reports..." to "No report visual uses the selected tables.", the grid is
+rebuilt and shows the new text. Explorer and Report Lineage provide
+equivalent copy/export behavior in their local grids.
 
 ## Power AI
 
