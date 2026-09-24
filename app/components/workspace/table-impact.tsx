@@ -127,6 +127,8 @@ export function TableImpact() {
       workspaceName: selectedEntry?.workspaceName,
       semanticModelId: selectedEntry?.semanticModelId,
       semanticModelName: selectedEntry?.semanticModelName,
+      // An inventory entry is indexed under the workspace its model lives in.
+      semanticModelWorkspaceId: selectedEntry?.workspaceId,
       reportId: undefined,
       reportName: undefined,
       objectType: selectedEntry ? (selectedColumnName ? "column" : "table") : undefined,
@@ -172,6 +174,7 @@ export function TableImpact() {
               workspaceName: selectedEntry.workspaceName,
               semanticModelId: selectedEntry.semanticModelId,
               semanticModelName: selectedEntry.semanticModelName,
+              semanticModelWorkspaceId: selectedEntry.workspaceId,
               objectType: selectedColumnName ? "column" : "table",
               objectId: `${selectedEntry.key}${selectedColumnName ? `:${selectedColumnName}` : ""}`,
               objectName: selectedColumnName ? `${selectedEntry.tableName}[${selectedColumnName}]` : selectedEntry.tableName,

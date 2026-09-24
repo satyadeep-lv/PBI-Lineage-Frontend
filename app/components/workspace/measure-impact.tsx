@@ -118,6 +118,8 @@ export function MeasureImpact() {
       workspaceName: selectedEntry?.workspaceName,
       semanticModelId: selectedEntry?.semanticModelId,
       semanticModelName: selectedEntry?.semanticModelName,
+      // An inventory entry is indexed under the workspace its model lives in.
+      semanticModelWorkspaceId: selectedEntry?.workspaceId,
       reportId: undefined,
       reportName: undefined,
       objectType: selectedEntry ? "measure" : undefined,
@@ -161,6 +163,7 @@ export function MeasureImpact() {
               workspaceName: selectedEntry.workspaceName,
               semanticModelId: selectedEntry.semanticModelId,
               semanticModelName: selectedEntry.semanticModelName,
+              semanticModelWorkspaceId: selectedEntry.workspaceId,
               objectType: "measure",
               objectId: selectedEntry.key,
               objectName: `${selectedEntry.tableName}[${selectedEntry.measureName}]`,

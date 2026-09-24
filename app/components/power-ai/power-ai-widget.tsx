@@ -2,6 +2,7 @@ import { Loader2 } from "lucide-react";
 import { lazy, Suspense, useEffect } from "react";
 
 import { PowerAiTrigger } from "~/components/power-ai/power-ai-trigger";
+import { cn } from "~/lib/utils";
 import { usePowerAiStore } from "~/stores/power-ai-store";
 
 /**
@@ -26,6 +27,7 @@ const PowerAiContent = lazy(() =>
 export function PowerAiWidget() {
   const open = usePowerAiStore((state) => state.widgetOpen);
   const setOpen = usePowerAiStore((state) => state.setWidgetOpen);
+  const expanded = usePowerAiStore((state) => state.expanded);
 
   useEffect(() => {
     if (!open) return;
@@ -48,7 +50,10 @@ export function PowerAiWidget() {
   return (
     <aside
       aria-label="Power AI"
-      className="fixed top-16 right-0 z-50 flex h-[calc(100vh-4rem)] w-[min(380px,92vw)] flex-col border-l border-zinc-200 bg-white shadow-2xl"
+      className={cn(
+        "fixed top-16 right-0 z-50 flex h-[calc(100vh-4rem)] flex-col border-l border-zinc-200 bg-white shadow-2xl motion-safe:transition-[width] motion-safe:duration-200",
+        expanded ? "w-[min(720px,96vw)]" : "w-[min(380px,92vw)]",
+      )}
     >
       <Suspense fallback={<WidgetLoading />}>
         <PowerAiContent onCollapse={() => setOpen(false)} />

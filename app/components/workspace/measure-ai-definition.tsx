@@ -1,6 +1,9 @@
-import { Download, FileText, Loader2, Sparkles } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Download, FileText, Loader2, MessageCircleQuestionMark, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { AnswerView } from "~/components/power-ai/answer-view";
+import { CopyButton } from "~/components/power-ai/copy-button";
+import { LineageStrip } from "~/components/power-ai/lineage-strip";
 import { Button } from "~/components/ui/button";
 import {
   buildChatRequest,
@@ -10,7 +13,15 @@ import {
   type PowerAiAudience,
   type PowerAIContext,
 } from "~/lib/power-ai-api";
+import { parseAnswer, sectionTabs } from "~/lib/power-ai-answer";
+import { contextForEntity, entityQuestion, type AnswerEntity } from "~/lib/power-ai-entities";
+import { evidenceLine, groupBySection, isContextItem } from "~/lib/power-ai-evidence";
+import { measureLineageLayers } from "~/lib/power-ai-lineage";
+import { AI_ERROR_COPY } from "~/lib/use-power-ai-chat";
+import { prefersReducedMotion } from "~/lib/use-revealed-text";
+import { cn } from "~/lib/utils";
 import { useAppStore } from "~/stores/app-store";
+import { usePowerAiStore } from "~/stores/power-ai-store";
 
 /** One selectable measure, carrying the mapping evidence already on screen for it. */
 export type MeasureDefinitionTarget = {
@@ -28,15 +39,6 @@ export type MeasureDefinitionTarget = {
  */
 const AUDIENCE: PowerAiAudience = "developer";
 
-const FACT_TYPE_LABELS: Record<string, string> = {
-  definition: "Definition",
-  dependency: "Depends on",
-  source: "Physical sources",
-  usage: "Used by",
-  impact: "Downstream impact",
-  relationship: "Related objects",
-};
-
 const STATUS_NOTE: Partial<Record<AiChatResponse["status"], string>> = {
   insufficient_evidence: "Power AI did not have enough verified evidence to define this measure fully. What it could ground is below.",
   ambiguous: "Power AI found more than one possible reading of this measure. Narrow the selection and try again.",
@@ -44,86 +46,75 @@ const STATUS_NOTE: Partial<Record<AiChatResponse["status"], string>> = {
   out_of_scope: "Power AI treated this as outside what it can answer from this model's evidence.",
 };
 
+/** The staged wait text. Cosmetic: the request reports no progress, so these only say what usually takes the time. */
+const LOADING_STAGES: Array<{ after: number; text: string }> = [
+  { after: 4_000, text: "Reading DAX and lineage..." },
+  { after: 12_000, text: "Checking reports for visual impact..." },
+];
+
+/** How long a card stays highlighted after its tab is used. */
+const HIGHLIGHT_MS = 1_600;
+
+/** The panel's tabs. Any other section (e.g. "What was checked") is still shown, as a card without a tab. */
+const PANEL_TABS = new Set(["Overview", "DAX", "Semantic lineage", "Database", "Impact", "Visuals"]);
+
 /**
- * Spells out the four things a measure definition has to cover — and, just as
- * importantly, avoids the words that route the question away from the measure
- * agent. The backend classifies intent by keyword before it looks at the
- * object type, and "depend", "impact", "upstream", "downstream", "change",
- * "affect" and "remove" all send the question to the impact agent, which
- * gathers no DAX definition at all. That is what turned this panel's answer
- * into a bare "Depends on / Downstream impact" list. The measure agent already
- * returns definition, upstream lineage and impact evidence together, so asking
- * it plainly gets all four topics back.
+ * The numbered structure steers how a model writes the answer up. The
+ * evidence itself doesn't depend on the wording: for a selected measure the
+ * backend gathers the same complete set whatever the question says.
  */
 function questionFor(target: MeasureDefinitionTarget): string {
   return [
     `Explain the measure '${target.name}' in table '${target.table}'.`,
-    "Cover four things, in this order:",
+    "Cover five things, in this order:",
     "1. A plain-language definition of what this measure calculates.",
     "2. The DAX expression it uses, and what each part of that expression does.",
     "3. The sources that DAX reads - name the semantic tables, and the database tables and columns behind them.",
     "4. Which objects it reads, and which other measures or visuals build on it, including references that cross into another table or model.",
+    "5. Which report visuals would change if it changed, and whether they use it directly or through another measure.",
   ].join(" ");
 }
 
-const INTENT_DIVERTING_WORDS = ["impact", "depend", "upstream", "downstream", "removed", "remove", "changes", "change", "affect", "what happens if"];
-
-/** Guards the wording above: any of these words silently reroutes the question to the impact agent. */
-export function divertsIntent(question: string): string[] {
-  const normalized = question.toLowerCase();
-  return INTENT_DIVERTING_WORDS.filter((word) => normalized.includes(word));
+/** The response's evidence in answer-section order, without the context line the answer already opens with. */
+function evidenceSections(response: AiChatResponse) {
+  return groupBySection(response.evidence.filter((item) => !isContextItem(item)));
 }
 
-/** Backend evidence grouped by what kind of fact it is, in a fixed reading order. */
-function groupEvidence(response: AiChatResponse): Array<[string, AiChatResponse["evidence"]]> {
-  const order = Object.keys(FACT_TYPE_LABELS);
-  const grouped = new Map<string, AiChatResponse["evidence"]>();
-  response.evidence.forEach((item) => {
-    grouped.set(item.fact_type, [...(grouped.get(item.fact_type) ?? []), item]);
-  });
-  const rank = (key: string) => (order.indexOf(key) === -1 ? order.length : order.indexOf(key));
-  return [...grouped.entries()].sort((a, b) => rank(a[0]) - rank(b[0]));
-}
-
-/** A self-contained document, so a downloaded answer still says what it was about and what backed it. */
-function toMarkdown(target: MeasureDefinitionTarget, response: AiChatResponse, context: PowerAIContext): string {
+/**
+ * A self-contained document, so a downloaded answer still says what it was
+ * about and what backed it. The answer itself goes in verbatim in both formats,
+ * followed by every evidence item — the screen shows less than this, the
+ * download never does.
+ */
+function toDocument(target: MeasureDefinitionTarget, response: AiChatResponse, context: PowerAIContext, format: "md" | "txt"): string {
+  const md = format === "md";
+  const heading = (level: 1 | 2, text: string) => (md ? `${"#".repeat(level)} ${text}` : text);
+  const field = (label: string, value: string) => (md ? `**${label}:** ${value}` : `${label}: ${value}`);
   const lines = [
-    `# ${target.name}`,
+    heading(1, target.name),
     "",
-    `**Semantic table:** ${target.table}`,
-    `**Workspace:** ${context.workspaceName ?? "Not reported"}`,
-    `**Report:** ${context.reportName ?? "Not reported"}`,
-    `**Semantic model:** ${context.semanticModelName ?? "Not reported"}`,
-    `**Source column:** ${target.sourceColumn}`,
-    `**Source table:** ${target.sourceTable}`,
-    `**Answer status:** ${response.status}`,
+    field("Semantic table", target.table),
+    field("Workspace", context.workspaceName ?? "Not reported"),
+    field("Report", context.reportName ?? "Not reported"),
+    field("Semantic model", context.semanticModelName ?? "Not reported"),
+    field("Source column", target.sourceColumn),
+    field("Source table", target.sourceTable),
+    field("Answer status", response.status),
+    field("Written by", response.usage ? `Power AI (${response.usage.model})` : "Lineage evidence"),
     "",
-    "## Definition",
+    heading(2, "Definition"),
     "",
-    response.answer || "_Power AI returned no answer text._",
+    response.answer || "Power AI returned no answer text.",
     "",
-    "## DAX expression",
+    heading(2, "DAX expression"),
     "",
-    "```dax",
-    target.daxExpression,
-    "```",
+    ...(md ? ["```dax", target.daxExpression, "```"] : [target.daxExpression]),
   ];
-  groupEvidence(response).forEach(([factType, items]) => {
-    lines.push("", `## ${FACT_TYPE_LABELS[factType] ?? factType}`, "");
-    items.forEach((item) => {
-      lines.push(`- **${item.object_name}** (${item.object_type}, ${item.source_type}, ${item.verification_status})${item.display_value ? ` — ${item.display_value}` : ""}`);
-    });
+  evidenceSections(response).forEach(({ section, items }) => {
+    lines.push("", heading(2, section.title), "");
+    items.forEach((item) => lines.push(`- ${evidenceLine(item)} (${item.object_type}, ${item.source_type}, ${item.verification_status})`));
   });
   return `${lines.join("\n")}\n`;
-}
-
-/** The same document without Markdown syntax, for the plain-text download. */
-function toPlainText(markdown: string): string {
-  return markdown
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/^```.*$/gm, "")
-    .replace(/\*\*/g, "")
-    .replace(/^- /gm, "  - ");
 }
 
 function download(content: string, type: string, fileName: string) {
@@ -135,60 +126,114 @@ function download(content: string, type: string, fileName: string) {
   URL.revokeObjectURL(url);
 }
 
-/** One labelled fact the page already holds, shown beside the answer so the DAX and its source are never missing. */
-function EvidenceFacts({ title, value, mono = false }: { title: string; value: string; mono?: boolean }) {
-  return <div>
-    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{title}</p>
-    <p className={`mt-1 whitespace-pre-wrap break-words text-sm text-zinc-800${mono ? " font-mono text-xs" : ""}`}>{value}</p>
-  </div>;
+/** Says who wrote the answer up: a model (named in the tooltip) or the backend straight from the evidence. */
+function AuthorBadge({ usage }: { usage: AiChatResponse["usage"] }) {
+  return usage
+    ? <span title={`Model: ${usage.model}`} className="inline-flex items-center gap-1 rounded-full border border-teal-200 bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-teal-800"><Sparkles className="size-3" /> Written by Power AI</span>
+    : <span className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] font-medium text-zinc-600">From lineage evidence</span>;
 }
 
 function fileStem(target: MeasureDefinitionTarget) {
   return `${target.table}-${target.name}`.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "measure-definition";
 }
 
+function qualified(target: MeasureDefinitionTarget) {
+  return `${target.table}[${target.name}]`;
+}
+
 /**
  * Generates a full, reader-appropriate definition of one measure through the
  * backend's evidence-grounded Power AI route, inline beneath the mapping grid.
  * Unlike `AskPowerAiButton`, which hands its question to the shared chat
- * widget, this keeps the answer on the page so it can be downloaded.
+ * widget, this keeps the answer on the page so it can be explored and
+ * downloaded. Only the definition is shown: the evidence behind it goes into
+ * the downloads rather than being listed again under the answer.
  */
 export function MeasureAiDefinition({ measures, context }: { measures: MeasureDefinitionTarget[]; context: PowerAIContext }) {
   const apiOrigin = useAppStore((state) => state.apiOrigin);
   const [selectedKey, setSelectedKey] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [response, setResponse] = useState<AiChatResponse | null>(null);
+  const [generatingSince, setGeneratingSince] = useState<number | null>(null);
+  const [result, setResult] = useState<{ target: MeasureDefinitionTarget; response: AiChatResponse } | null>(null);
   const [error, setError] = useState<PowerAiApiError | null>(null);
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  const sectionElements = useRef(new Map<string, HTMLElement>());
+  const request = useRef(0);
 
   const selected = useMemo(
     () => measures.find((measure) => measure.key === selectedKey) ?? measures[0] ?? null,
     [measures, selectedKey],
   );
 
-  async function generate() {
-    if (!selected) return;
-    setIsGenerating(true);
+  useEffect(() => {
+    if (!highlighted) return;
+    const timer = setTimeout(() => setHighlighted(null), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [highlighted]);
+
+  const measureContext = (target: MeasureDefinitionTarget): PowerAIContext => ({ ...context, objectType: "measure", objectId: undefined, objectName: qualified(target) });
+
+  async function generate(target = selected) {
+    if (!target) return;
+    const attempt = ++request.current;
+    setGeneratingSince(Date.now());
     setError(null);
-    setResponse(null);
+    setResult(null);
     try {
-      const answer = await explainObject(
-        apiOrigin,
-        buildChatRequest(questionFor(selected), AUDIENCE, { ...context, objectType: "measure", objectName: selected.name }),
-      );
-      setResponse(answer);
+      const response = await explainObject(apiOrigin, buildChatRequest(questionFor(target), AUDIENCE, measureContext(target)));
+      if (attempt === request.current) setResult({ target, response });
     } catch (caught) {
-      setError(caught as PowerAiApiError);
+      if (attempt === request.current) setError(caught as PowerAiApiError);
     } finally {
-      setIsGenerating(false);
+      if (attempt === request.current) setGeneratingSince(null);
     }
   }
 
-  const markdown = response && selected ? toMarkdown(selected, response, context) : "";
+  /** A measure in this panel is defined here; anything else is asked in the chat, seeded but not sent. */
+  function onEntity(entity: AnswerEntity) {
+    const measure = entity.kind === "measure"
+      ? measures.find((candidate) => (entity.qualifiedName ? qualified(candidate) === entity.qualifiedName : candidate.name === entity.name))
+      : undefined;
+    if (measure) {
+      setSelectedKey(measure.key);
+      void generate(measure);
+      return;
+    }
+    const question = entityQuestion(entity);
+    if (!question) return;
+    const store = usePowerAiStore.getState();
+    store.mergeContext(contextForEntity(result ? measureContext(result.target) : context, entity));
+    store.setPendingQuestion(question);
+    store.setWidgetOpen(true);
+  }
+
+  /** A follow-up goes to the chat with this measure as its context, and is sent straight away. */
+  function followUp(question: string) {
+    if (!result) return;
+    const store = usePowerAiStore.getState();
+    store.mergeContext(measureContext(result.target));
+    store.queueQuestion(question);
+    store.setWidgetOpen(true);
+  }
+
+  function goToSection(sectionId: string) {
+    const element = sectionElements.current.get(sectionId);
+    if (!element) return;
+    element.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
+    element.querySelector<HTMLElement>("button")?.focus({ preventScroll: true });
+    setHighlighted(sectionId);
+  }
+
+  const response = result?.response ?? null;
+  const target = result?.target ?? null;
+  const sections = useMemo(() => parseAnswer(response?.answer ?? ""), [response]);
+  const tabs = useMemo(() => sectionTabs(sections).filter((tab) => PANEL_TABS.has(tab.label)), [sections]);
+  const layers = useMemo(() => (response && target ? measureLineageLayers(response.evidence, target) : []), [response, target]);
+  const generating = generatingSince !== null;
 
   return <section className="border border-zinc-200">
     <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-3">
       <p className="flex items-center gap-2 text-sm font-semibold"><Sparkles className="size-4 text-teal-700" /> Measure definition with Power AI</p>
-      <p className="mt-0.5 max-w-3xl text-xs leading-5 text-zinc-500">Select a measure for its full definition, read straight from gathered lineage evidence: what it calculates, its DAX, the tables and columns that DAX reads, and what it depends on. This is deterministic evidence, not a model answer, so it works even when the AI assistant is disabled. It stays on this page and can be downloaded.</p>
+      <p className="mt-0.5 max-w-3xl text-xs leading-5 text-zinc-500">Select a measure for its full definition: what it calculates, its DAX, the tables and columns that DAX reads, what builds on it, and which report visuals would change with it. Power AI writes this from verified lineage evidence when AI is enabled, and shows the evidence directly when it is not, so it works either way. Click a name to explore it; the downloads include every fact behind the answer.</p>
     </div>
 
     {!measures.length
@@ -201,40 +246,135 @@ export function MeasureAiDefinition({ measures, context }: { measures: MeasureDe
                   {measures.map((measure) => <option key={measure.key} value={measure.key}>{measure.table} · {measure.name}</option>)}
                 </select>
               </div>
-              <Button type="button" disabled={!selected || isGenerating} onClick={() => void generate()} className="h-10">
-                {isGenerating ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                {isGenerating ? "Generating" : "Power AI definition"}
+              <Button type="button" disabled={!selected || generating} onClick={() => void generate()} className="h-10">
+                {generating ? <Loader2 className="size-4 motion-safe:animate-spin" /> : <Sparkles className="size-4" />}
+                {generating ? "Generating" : "Power AI definition"}
               </Button>
             </div>
 
-            {error && <div className="border border-rose-200 bg-rose-50 p-3 text-sm leading-6 text-rose-900">{error.message}</div>}
+            {/* Always the vetted copy for the reason, never the raw backend message. */}
+            {error && <div role="alert" className="border border-rose-200 bg-rose-50 p-3 text-sm leading-6 text-rose-900">{AI_ERROR_COPY[error.reason] ?? AI_ERROR_COPY.unknown}</div>}
 
-            {response && selected && <div className="space-y-3">
-              {STATUS_NOTE[response.status] && <div className="border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">{STATUS_NOTE[response.status]}</div>}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-2">
-                <p className="text-sm font-semibold">{selected.table} · {selected.name}</p>
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" size="sm" title="Download as plain text" onClick={() => download(toPlainText(markdown), "text/plain;charset=utf-8", `${fileStem(selected)}-definition.txt`)}><FileText className="size-3.5" /> .txt</Button>
-                  <Button type="button" variant="outline" size="sm" title="Download as Markdown" onClick={() => download(markdown, "text/markdown;charset=utf-8", `${fileStem(selected)}-definition.md`)}><Download className="size-3.5" /> .md</Button>
+            {generating && <DefinitionSkeleton since={generatingSince} />}
+
+            {response && target && <div className="space-y-4" data-testid="measure-definition">
+              <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-200 pb-3">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-semibold text-zinc-950">{target.name}</h3>
+                    <AuthorBadge usage={response.usage} />
+                  </div>
+                  <p className="text-xs text-zinc-500">
+                    Table <span className="font-medium text-zinc-700">{target.table}</span>
+                    {context.semanticModelName && <> · Model <span className="font-medium text-zinc-700">{context.semanticModelName}</span></>}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CopyButton text={response.answer} label="Copy answer" className="h-7 rounded-md border border-zinc-200 bg-white px-2.5">
+                    <span>Copy</span>
+                  </CopyButton>
+                  <Button type="button" variant="outline" size="sm" title="Download as plain text" onClick={() => download(toDocument(target, response, context, "txt"), "text/plain;charset=utf-8", `${fileStem(target)}-definition.txt`)}><FileText className="size-3.5" /> .txt</Button>
+                  <Button type="button" variant="outline" size="sm" title="Download as Markdown" onClick={() => download(toDocument(target, response, context, "md"), "text/markdown;charset=utf-8", `${fileStem(target)}-definition.md`)}><Download className="size-3.5" /> .md</Button>
                 </div>
               </div>
-              <div className="whitespace-pre-wrap border border-zinc-200 bg-white p-4 text-sm leading-6 text-zinc-800">{response.answer || "Power AI returned no answer text."}</div>
-              <div className="grid gap-4 border-t border-zinc-200 pt-4 md:grid-cols-2">
-                <EvidenceFacts title="DAX expression" mono value={selected.daxExpression} />
-                <EvidenceFacts title="Reads from" value={`${selected.sourceColumn} in ${selected.sourceTable}`} />
+
+              {STATUS_NOTE[response.status] && <p className="flex items-start gap-1.5 rounded-md bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-900"><MessageCircleQuestionMark className="mt-0.5 size-3.5 shrink-0" aria-hidden />{STATUS_NOTE[response.status]}</p>}
+
+              <LineageStrip layers={layers} onEntity={onEntity} disabled={generating} />
+
+              <div className="space-y-3">
+                {tabs.length > 1 && (
+                  <nav aria-label="Answer sections" className="sticky top-16 z-10 -mx-1 flex flex-wrap gap-1 border-b border-zinc-200 bg-white/95 px-1 py-2 backdrop-blur-sm">
+                    {tabs.map((tab) => (
+                      <button
+                        key={tab.label}
+                        type="button"
+                        onClick={() => goToSection(tab.sectionId)}
+                        aria-current={highlighted === tab.sectionId ? "true" : undefined}
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600",
+                          highlighted === tab.sectionId ? "border-teal-700 bg-teal-700 text-white" : "border-zinc-200 text-zinc-700 hover:border-teal-700 hover:text-teal-900",
+                        )}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </nav>
+                )}
+                <div className="text-sm leading-6 text-zinc-800">
+                  {response.answer
+                    ? <AnswerView
+                        text={response.answer}
+                        evidence={response.evidence}
+                        variant="panel"
+                        onEntity={onEntity}
+                        entitiesDisabled={generating}
+                        sectionRef={(sectionId, element) => {
+                          if (element) sectionElements.current.set(sectionId, element);
+                          else sectionElements.current.delete(sectionId);
+                        }}
+                        highlightedSectionId={highlighted}
+                      />
+                    : "Power AI returned no answer text."}
+                </div>
               </div>
-              {groupEvidence(response).map(([factType, items]) => <div key={factType}>
-                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{FACT_TYPE_LABELS[factType] ?? factType}</p>
-                <ul className="mt-1.5 space-y-1">
-                  {items.map((item) => <li key={item.evidence_id} className="flex flex-wrap items-baseline gap-x-2 text-sm text-zinc-800">
-                    <span className="font-medium">{item.object_name}</span>
-                    {item.display_value && <span className="font-mono text-xs text-zinc-600">{item.display_value}</span>}
-                    <span className="text-[11px] uppercase text-zinc-400">{item.object_type} · {item.source_type} · {item.verification_status}</span>
-                  </li>)}
-                </ul>
-              </div>)}
+
+              {response.suggested_questions.length > 0 && (
+                <div className="space-y-1.5 border-t border-zinc-200 pt-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Ask Power AI next</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {response.suggested_questions.map((question) => (
+                      <button
+                        key={question}
+                        type="button"
+                        onClick={() => followUp(question)}
+                        className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-left text-xs text-teal-900 hover:border-teal-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600"
+                      >
+                        {question}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {response.evidence.length > 0 && <p className="text-xs text-zinc-500">Grounded in {response.evidence.length} verified {response.evidence.length === 1 ? "fact" : "facts"}{response.claims.length ? ` across ${response.claims.length} ${response.claims.length === 1 ? "claim" : "claims"}` : ""}. All of it is included in the downloads.</p>}
             </div>}
           </div>}
   </section>;
+}
+
+/** The shape of the answer while it is generated, with a line about what usually takes the time. */
+function DefinitionSkeleton({ since }: { since: number | null }) {
+  const [stage, setStage] = useState(-1);
+
+  useEffect(() => {
+    if (since === null) return;
+    setStage(-1);
+    const timers = LOADING_STAGES.map((entry, position) => setTimeout(() => setStage(position), Math.max(0, entry.after - (Date.now() - since))));
+    return () => timers.forEach(clearTimeout);
+  }, [since]);
+
+  const bar = "rounded bg-zinc-200/80 motion-safe:animate-pulse";
+  return (
+    <div aria-busy="true" className="space-y-4" data-testid="measure-definition-loading">
+      <div className="space-y-2 border-b border-zinc-200 pb-3">
+        <div className={cn(bar, "h-5 w-48")} />
+        <div className={cn(bar, "h-3 w-64")} />
+      </div>
+      <div className="flex gap-1.5">
+        {[64, 44, 104, 72].map((width) => <div key={width} className={cn(bar, "h-6 rounded-full")} style={{ width }} />)}
+      </div>
+      {[0, 1, 2].map((card) => (
+        <div key={card} className="space-y-2 rounded-lg border border-zinc-200 p-3">
+          <div className={cn(bar, "h-4 w-40")} />
+          <div className={cn(bar, "h-3 w-full")} />
+          <div className={cn(bar, "h-3 w-5/6")} />
+        </div>
+      ))}
+      <p aria-live="polite" className="flex items-center gap-2 text-xs text-zinc-500">
+        <Loader2 className="size-3.5 motion-safe:animate-spin" aria-hidden />
+        {stage >= 0 ? LOADING_STAGES[stage].text : "Generating the definition"}
+      </p>
+    </div>
+  );
 }

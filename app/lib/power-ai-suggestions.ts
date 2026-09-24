@@ -15,13 +15,14 @@ export function suggestedQuestionsFor(context: PowerAIContext): string[] {
       return [`Explain this table`, `Where does this table's data come from?`, `Which measures use this table?`, `What happens if it changes?`];
     case "semantic_model":
       return [`Explain this semantic model`, `Which reports use this model?`, `What tables and measures are important here?`, `What happens if it changes?`];
+    // Only what the backend answers from a report's own evidence, which has no impact analysis of its own.
     case "report":
       return [
         `Explain this report`,
         `Which semantic model powers it?`,
         `Where does the data come from?`,
-        `Which measures are important?`,
-        `What changes could impact this report?`,
+        `Which measures are used?`,
+        `Which database tables feed this report?`,
       ];
     case "visual":
       return [`Explain this visual`, `Which fields does this visual use?`, `Where does this visual's data come from?`];

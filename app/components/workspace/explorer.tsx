@@ -72,6 +72,7 @@ export function Explorer() {
       reportName: undefined,
       semanticModelId: undefined,
       semanticModelName: undefined,
+      semanticModelWorkspaceId: undefined,
       objectType: undefined,
       objectId: undefined,
       objectName: undefined,

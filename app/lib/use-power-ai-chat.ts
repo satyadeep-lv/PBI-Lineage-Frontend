@@ -6,6 +6,7 @@ import {
   sendChatMessage,
   streamChatMessage,
   type AiChatResponse,
+  type AiFocus,
   type AiUnavailableReason,
   type PowerAiApiError,
 } from "~/lib/power-ai-api";
@@ -30,19 +31,33 @@ export const AI_ERROR_COPY: Record<AiUnavailableReason, string> = {
   unknown: "Something went wrong. Try again.",
 };
 
-/** Applies a finished AiChatResponse (from either transport) to the assistant message — one code path so both stay identical. */
-function applyResponse(assistantId: string, response: AiChatResponse) {
+/**
+ * Applies a finished AiChatResponse (from either transport) to the assistant
+ * message — one code path so both stay identical. `answer` is authoritative;
+ * `streamedText` is only a fallback so a response that ever arrives without
+ * one still shows what streamed in rather than an empty bubble. The same goes
+ * for `focus`: the response's wins over the stream's `metadata` one.
+ */
+function applyResponse(assistantId: string, response: AiChatResponse, streamedText = "", streamedFocus?: AiFocus | null) {
   usePowerAiStore.getState().updateMessage(assistantId, {
-    text: response.answer,
+    text: response.answer || streamedText,
     pending: false,
     status: response.status,
     evidence: response.evidence,
     claims: response.claims,
     suggestedQuestions: response.suggested_questions,
-    agent: response.agent,
+    agent: response.agent ?? undefined,
+    focus: response.focus !== undefined ? response.focus : streamedFocus,
+    answeredAt: Date.now(),
   });
   usePowerAiStore.getState().setConversationId(response.conversation_id);
 }
+
+/**
+ * The one request in flight, whichever component started it: the input's
+ * Stop button must be able to cancel a stream a follow-up chip began.
+ */
+let active: { controller: AbortController; owner: object } | null = null;
 
 /**
  * The single chat implementation shared by every Power AI container (desktop
@@ -54,13 +69,19 @@ function applyResponse(assistantId: string, response: AiChatResponse) {
 export function usePowerAiChat() {
   const apiOrigin = useAppStore((state) => state.apiOrigin);
   const statusQuery = usePowerAiStatus();
-  const abortRef = useRef<AbortController | null>(null);
+  const ownerRef = useRef<object>({});
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // Unmounting the component that started a stream (closing the widget) stops it.
+  useEffect(() => () => {
+    if (active?.owner === ownerRef.current) {
+      active.controller.abort();
+      active = null;
+    }
+  }, []);
 
   function cancel() {
-    abortRef.current?.abort();
-    abortRef.current = null;
+    active?.controller.abort();
+    active = null;
     usePowerAiStore.getState().setStreaming(false);
     usePowerAiStore.getState().setLoading(false);
   }
@@ -75,40 +96,51 @@ export function usePowerAiChat() {
     store.appendMessage({ id: messageId(), role: "user", text, createdAt: Date.now() });
 
     const assistantId = messageId();
-    store.appendMessage({ id: assistantId, role: "assistant", text: "", pending: true, createdAt: Date.now() });
+    const streaming = isStreamingEnabled(statusQuery.data);
+    store.appendMessage({ id: assistantId, role: "assistant", text: "", pending: true, question: text, streamed: streaming, createdAt: Date.now() });
     store.setLoading(true);
 
     const request = buildChatRequest(text, store.audience, store.context, store.conversationId);
 
-    if (isStreamingEnabled(statusQuery.data)) {
+    if (streaming) {
       store.setStreaming(true);
       const controller = new AbortController();
-      abortRef.current = controller;
+      active = { controller, owner: ownerRef.current };
       let accumulated = "";
+      let streamedFocus: AiFocus | null | undefined;
+      const finish = () => {
+        usePowerAiStore.getState().setLoading(false);
+        usePowerAiStore.getState().setStreaming(false);
+        if (active?.controller === controller) active = null;
+      };
 
       await streamChatMessage(apiOrigin, request, {
         signal: controller.signal,
-        onMetadata: (conversationId) => usePowerAiStore.getState().setConversationId(conversationId),
+        onMetadata: (conversationId, _agent, focus) => {
+          usePowerAiStore.getState().setConversationId(conversationId);
+          if (focus !== undefined) {
+            streamedFocus = focus;
+            usePowerAiStore.getState().updateMessage(assistantId, { focus });
+          }
+        },
         onDelta: (text) => {
           accumulated += text;
           usePowerAiStore.getState().updateMessage(assistantId, { text: accumulated, pending: true });
         },
         onEvidence: (evidence) => usePowerAiStore.getState().updateMessage(assistantId, { evidence }),
         onComplete: (response) => {
-          applyResponse(assistantId, response);
-          usePowerAiStore.getState().setLoading(false);
-          usePowerAiStore.getState().setStreaming(false);
-          abortRef.current = null;
+          applyResponse(assistantId, response, accumulated, streamedFocus);
+          finish();
         },
         onError: (error) => {
           // Always the vetted copy for the reason, never the raw backend/provider message — see section 22.
           usePowerAiStore.getState().updateMessage(assistantId, { pending: false });
           usePowerAiStore.getState().setError(AI_ERROR_COPY[error.reason] ?? AI_ERROR_COPY.unknown);
-          usePowerAiStore.getState().setLoading(false);
-          usePowerAiStore.getState().setStreaming(false);
-          abortRef.current = null;
+          finish();
         },
       });
+      // Stopped by the user: no answer and no error, so the half-open message closes instead of spinning on.
+      if (controller.signal.aborted) usePowerAiStore.getState().updateMessage(assistantId, { pending: false });
       return;
     }
 

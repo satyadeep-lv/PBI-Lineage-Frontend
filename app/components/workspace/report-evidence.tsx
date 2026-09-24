@@ -288,7 +288,7 @@ export function ReportEvidence({ binding, modelNames, activeSection, onSectionCh
     {activeSection === "report-detail" && <ReportDetailTab workspace={workspace} selectedReport={report} reportSemanticModel={boundModel} detailQuery={reportDetailQuery} pagesQuery={reportPagesQuery} />}
     {activeSection === "source-db-lineage" && <SourceDbLineageTab workspace={workspace} selectedReport={report} query={reportSourceTablesQuery} gatewaySourcesEnabled={gatewaySourcesEnabled} onGatewaySourcesChange={setGatewaySourcesEnabled} />}
     {activeSection === "semantic-objects" && <SemanticObjectsTab workspace={workspace} selectedReport={report} reportSemanticModel={boundModel} modelNames={modelNames} query={semanticModelObjectsQuery} metadataQuery={semanticMetadataQuery} />}
-    {activeSection === "semantic-db-mapping" && <SemanticDbMappingTab workspace={workspace} selectedReport={report} semanticModelId={boundModelId} semanticModelName={boundModelName} query={explorerSnapshotQuery} gatewaySourcesEnabled={gatewaySourcesEnabled} onGatewaySourcesChange={setGatewaySourcesEnabled} />}
+    {activeSection === "semantic-db-mapping" && <SemanticDbMappingTab workspace={workspace} selectedReport={report} semanticModelId={boundModelId} semanticModelName={boundModelName} semanticModelWorkspaceId={boundModelWorkspaceId} query={explorerSnapshotQuery} gatewaySourcesEnabled={gatewaySourcesEnabled} onGatewaySourcesChange={setGatewaySourcesEnabled} />}
     {activeSection === "report-semantic" && <ReportSemanticTab workspace={workspace} selectedReport={report} reportSemanticModel={boundModel} boundModelId={boundModelId} normalizedQuery={normalizedReportQuery} lineageQuery={reportSemanticLineageQuery} parsed={parsedSemanticModelQuery.data} />}
   </>;
 }
@@ -440,11 +440,13 @@ function SemanticObjectsTab({ workspace, selectedReport, reportSemanticModel, mo
   </div>;
 }
 
-function SemanticDbMappingTab({ workspace, selectedReport, semanticModelId, semanticModelName, query, gatewaySourcesEnabled, onGatewaySourcesChange }: {
+function SemanticDbMappingTab({ workspace, selectedReport, semanticModelId, semanticModelName, semanticModelWorkspaceId, query, gatewaySourcesEnabled, onGatewaySourcesChange }: {
   workspace: Workspace | null;
   selectedReport: Report | null;
   semanticModelId: string | null;
   semanticModelName: string | null;
+  /** Where the bound model actually lives, which can differ from the report's workspace. */
+  semanticModelWorkspaceId: string | null;
   query: UseQueryResult<ExplorerSnapshot, Error>;
   gatewaySourcesEnabled: boolean;
   onGatewaySourcesChange: (value: boolean) => void;
@@ -523,6 +525,7 @@ function SemanticDbMappingTab({ workspace, selectedReport, semanticModelId, sema
           reportName: selectedReport?.name,
           semanticModelId: semanticModelId ?? undefined,
           semanticModelName: semanticModelName ?? undefined,
+          semanticModelWorkspaceId: semanticModelWorkspaceId ?? undefined,
           route: "/workspace/explorer",
         }}
       />
