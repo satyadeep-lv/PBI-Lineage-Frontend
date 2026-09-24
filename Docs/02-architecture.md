@@ -146,7 +146,8 @@ The two impact pages share one more layer on top of that engine:
   headings, status bands, and loading/empty states.
 
 `closureToLineageGraph` in `dependency-graph.ts` remains the graph builder for
-Report Lineage's calculation diagrams; the impact pages do not use it.
+the calculation diagrams in `report-lineage-diagrams.tsx`; the impact pages do
+not use it.
 
 ## Request Flow
 

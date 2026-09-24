@@ -19,7 +19,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
 
-const { mockBackend } = require("./mock-backend.cjs");
+const { fixture, mockBackend } = require("./mock-backend.cjs");
 
 const VIEWPORT = { width: 1280, height: 760 };
 const TOTAL_STEPS = 9;
@@ -70,17 +70,20 @@ const graphCard = (page) => page.locator(".react-flow").first().locator("xpath=a
 const graphNode = (page, label) =>
   page.locator(".react-flow__node").filter({ has: page.getByText(label, { exact: true }) });
 
-/**
- * What to frame in an impact graph. A node is picked when any rule matches:
- * `all`, `focal` (the ringed node), a `labels` entry equal to its label, or an
- * `ids` fragment inside its React Flow id (object ids are namespaced per model).
- */
 // The report opened in Explorer earlier in the storyboard; Measure impact expands it into its visuals.
 const EXPANDED_REPORT = "Profit and Loss";
+const SALES_MODEL_ID = fixture.MODELS.find((item) => item.name === "Sales Model").id;
+
+/*
+ * What frameGraph frames in an impact graph. `fit` picks the nodes to fit (and
+ * `center`, when given, the ones to centre on); a node is picked when any rule
+ * matches: `all`, `focal` (the ringed node), a `labels` entry equal to its label,
+ * or an `ids` fragment inside its React Flow id (object ids are namespaced per model).
+ */
 // Table impact: the chain behind the picked database table SALESDB.MART.FACT_ORDERS (the Sales Model block).
 const TABLE_GRAPH = {
   fit: {
-    ids: ["db|SALESDB.", `${modelIdOf("Sales Model")}`],
+    ids: ["db|SALESDB.", SALES_MODEL_ID],
     labels: ["Regional Sales", "Account Health", "Quota Attainment"],
   },
 };
@@ -91,13 +94,6 @@ const MEASURE_GRAPH = { fit: { all: true }, axis: "height", center: { focal: tru
 const MEASURE_VISUALS_GRAPH = {
   fit: { focal: true, ids: ["visual|"], labels: [EXPANDED_REPORT, "Sales", "Sales[Amount]", "ANALYTICS.FINANCE.FACT_SALES"] },
 };
-
-function modelIdOf(name) {
-  const { fixture } = require("./mock-backend.cjs");
-  const model = fixture.MODELS.find((item) => item.name === name);
-  if (!model) throw new Error(`No mock semantic model named ${name}`);
-  return model.id;
-}
 
 async function centerOf(locator) {
   await locator.waitFor({ state: "visible" });

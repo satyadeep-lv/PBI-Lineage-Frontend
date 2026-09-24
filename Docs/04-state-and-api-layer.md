@@ -154,8 +154,9 @@ the flat DAX dependency response. `computeDependencyClosure` supports upstream,
 downstream, and bidirectional analysis with depth/directness/reference evidence.
 In each `DaxDependency`, `source` is the referenced object and `target` the one
 whose expression reads it. `closureToLineageGraph` converts a closure to the
-renderer-independent graph for Report Lineage's calculation diagrams; the
-impact pages build theirs with `buildImpactGraph` instead.
+renderer-independent graph for the calculation diagrams in
+`report-lineage-diagrams.tsx`; the impact pages build theirs with
+`buildImpactGraph` instead.
 
 ## Scanner API
 

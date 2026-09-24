@@ -81,7 +81,7 @@ This page lists maintained source and operational files. Generated
 | `app/lib/api-catalog.ts` | Runtime OpenAPI types/parsing, setup fallbacks, schema body templates, URL construction, and response helpers. |
 | `app/lib/use-api-executor.ts` | Shared cookie-aware endpoint execution, optional ephemeral admin header, timing, and normalized errors. |
 | `app/lib/query-provider.tsx` | Application-lifetime TanStack Query client. |
-| `app/lib/dependency-graph.ts` | Multi-source upstream/downstream DAX closure and conversion to the shared lineage graph (used by Report Lineage's calculation diagrams). |
+| `app/lib/dependency-graph.ts` | Multi-source upstream/downstream DAX closure and conversion to the shared lineage graph (used by `report-lineage-diagrams.tsx`; the impact pages use `buildImpactGraph`). |
 | `app/lib/lineage-api.ts` | Shared authenticated request helper, query keys, report batching, and scoped semantic inventory loading. |
 | `app/lib/impact-analysis.ts` | Impact evidence shared by Table and Measure Impact: `visual-source-lookup` fetch and `impactEvidenceKey`, `buildEvidenceIndex` (report, page, and visual names), `buildReportNames`, `SourcedTable`, `tableSources`, `tableSeeds`, and `displayType`. `measure-source-lineage` is intentionally not used. |
 | `app/lib/workspace-routes.ts` | `WORKSPACE_SECTIONS`, `isApiReferencePath` (header active state and full-width API reference), and `explorerHref` for Explorer deep links. |

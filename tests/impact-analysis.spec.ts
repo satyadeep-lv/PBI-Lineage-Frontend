@@ -410,22 +410,32 @@ test.describe("measure impact", () => {
 
     // The graph is focused on the measure: its input above, dependents and reports below, reports collapsed.
     await expect(page.getByRole("heading", { name: "Sales[Total Sales] impact" })).toBeVisible();
-    await expect(page.getByText("13 nodes · 16 links", { exact: true })).toBeVisible();
+    await expect(page.getByText(/^13 nodes · \d+ links$/)).toBeVisible();
     await expect(page.locator(".react-flow__node")).toHaveCount(13);
+    // Only the measure and its dependents lead to reports. Soft, so every check below still runs: this
+    // currently fails because buildImpactGraph also links report usage of the measure's upstream inputs,
+    // so Sales[Amount] -> Sales Performance is drawn (17 links) and that report shows "2 visuals",
+    // including "Amount by region", which reads only Sales[Amount] and is not impacted by Total Sales.
+    // The Reports and Visuals grids below correctly list one Sales Performance visual.
+    await expect.soft(page.getByText("13 nodes · 16 links", { exact: true }), "graph links only impacted objects to reports").toBeVisible({ timeout: 5_000 });
+    await expect.soft(graphNode(page, `report|${reportId}`), "report node counts only impacted visuals").toContainText("Finance · 1 visual", { timeout: 5_000 });
     const focal = graphNode(page, `${salesModelKey}|measure|sales|total sales`);
     await expect(focal).toContainText("Sales[Total Sales]");
     await expect(focal.locator(".ring-2")).toHaveCount(1);
     await expect(page.locator(".react-flow__node .ring-2")).toHaveCount(1);
-    for (const label of ["Sales[Amount]", "Sales[KPI]", "Metrics[Sales per Customer]", "Customers[Value Band]", "ANALYTICS.PUBLIC.SALES", "Sales Model"]) {
+    for (const label of ["Sales[Amount]", "Sales[KPI]", "Metrics[Sales per Customer]", "Customers[Value Band]", "ANALYTICS.PUBLIC.SALES", "ANALYTICS.PUBLIC.CUSTOMERS"]) {
       await expect(page.locator(".react-flow__node").getByText(label, { exact: true }), label).toBeVisible();
     }
+    await expect(graphNode(page, `model|${salesModelKey}`)).toContainText("Sales Model");
+    for (const table of ["sales", "metrics", "customers"]) await expect(graphNode(page, `${salesModelKey}|table|${table}`)).toBeVisible();
     await expect(graphNodes(page, "report|")).toHaveCount(2);
     await expect(graphNode(page, `report|${reportId4}`)).toHaveCount(0);
     await expect(graphNodes(page, "visual|")).toHaveCount(0);
     await expect(graphLegend(page).getByRole("listitem")).toHaveText(["Database table", "Semantic model", "Semantic table", "Column", "Calculated column", "Measure", "Report", "Visual"]);
     await graphNode(page, `report|${reportId}`).getByRole("button", { name: "Expand descendants" }).click();
-    await expect(page.getByText("14 nodes · 17 links", { exact: true })).toBeVisible();
     await expect(graphNode(page, `visual|${reportId}:overview:sales-card`)).toContainText("Total sales card");
+    await expect.soft(graphNode(page, `visual|${reportId}:overview:amount-table`), "a visual reading only an input is not drawn as impacted").toHaveCount(0, { timeout: 5_000 });
+    await expect.soft(page.getByText("14 nodes · 17 links", { exact: true })).toBeVisible({ timeout: 5_000 });
 
     const measureLabel = "Sales[Total Sales]";
     const tables = impactSection(page, "Tables");

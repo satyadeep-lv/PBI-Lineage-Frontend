@@ -757,7 +757,10 @@ application looks and behaves the same way:
   farther from the diagram's root through it (an undirected "display tree"
   computed with breadth-first search, rooted at the focal node or at
   in-degree-zero nodes), so collapse behaves correctly even in bidirectional
-  upstream+downstream diagrams such as Measure Impact.
+  upstream+downstream diagrams (the default `"connected"` mode). A diagram
+  can instead collapse along its edges only: `collapseDirection`
+  `"downstream"` (the impact graph) hides what a node feeds, and `"upstream"`
+  (the Snowflake trace) hides what feeds it.
 - `lineage-diagram.tsx` exports `<LineageDiagram>`, which owns collapse state,
   derives the currently visible node/edge subset, lays it out with ELK, and
   renders draggable nodes with React Flow. It keeps the flow mounted across
@@ -776,9 +779,9 @@ application looks and behaves the same way:
 use to answer "what feeds this object, and what does it feed" from one or more
 seed objects. In each edge, `source` is the referenced object and `target` the
 object whose expression reads it. `closureToLineageGraph` turns a closure into
-a `LineageGraph` for Report Lineage's calculation diagrams; the impact pages
-build their graph with `buildImpactGraph` instead (see Impact Evidence And
-Graph). `app/lib/lineage-api.ts`'s `fetchEstateInventory`
+a `LineageGraph` for the calculation diagrams in `report-lineage-diagrams.tsx`;
+the impact pages build their graph with `buildImpactGraph` instead (see Impact
+Evidence And Graph). `app/lib/lineage-api.ts`'s `fetchEstateInventory`
 complements both: it parses every semantic model across a workspace scope up
 front, so Table Impact can offer one grouped, multi-select table search and
 Measure Impact one searchable measure picker, instead of a
@@ -1468,7 +1471,7 @@ and collapsible in the same way.
 | File | Purpose and fulfilled responsibility |
 | --- | --- |
 | `app/lib/api-catalog.ts` | Defines OpenAPI/frontend endpoint types, fallback setup operations, request templates, schema example generation, endpoint flattening, URL construction, response parsing, method styles, and formatting helpers. |
-| `app/lib/dependency-graph.ts` | Pure multi-source DAX dependency traversal (`computeDependencyClosure`) shared by Table Impact and Measure Impact, plus `closureToLineageGraph`, which turns a closure into a `LineageGraph` for Report Lineage's calculation diagrams. |
+| `app/lib/dependency-graph.ts` | Pure multi-source DAX dependency traversal (`computeDependencyClosure`) shared by Table Impact and Measure Impact, plus `closureToLineageGraph`, which turns a closure into a `LineageGraph` for the calculation diagrams in `report-lineage-diagrams.tsx` (the impact pages use `buildImpactGraph`). |
 | `app/lib/impact-analysis.ts` | Evidence layer shared by Table Impact and Measure Impact: `fetchImpactEvidence` (`visual-source-lookup` only; `measure-source-lineage` is deliberately not used) and `impactEvidenceKey`, `buildEvidenceIndex` (reports and visuals per semantic object, with report, page, and visual names), `buildReportNames`, and the `SourcedTable`/`tableSources`/`tableSeeds`/`displayType` helpers. |
 | `app/lib/lineage-api.ts` | Shared admin-key-aware `requestJson` fetch helper for every `/lineage/*` and `/explorer/*` call, plus `boundReportsForModel`, chunked/concurrency-limited `fetchBatchedExplorer`, `fetchEstateInventory` (table/measure inventory with parsed definitions, over every workspace for Table Impact and the chosen scope for Measure Impact), and lineage query-key factories. |
 | `app/lib/scanner-api.ts` | Typed `startScan`/`getScanStatus`/`getScanResult` calls onto `/api/v1/scanner/*` (built on `requestJson`), `DEFAULT_SCAN_FLAGS`, and a full, defensive TypeScript model of Microsoft's real (backend-untyped) GetScanResult payload — every type and field from the official reference page. |
@@ -1899,6 +1902,5 @@ implemented here because this repository does not modify the backend:
    client-side 50-report chunking in `fetchBatchedExplorer` and the per-model
    request fan-out.
 3. Raise or remove `ExplorerRequest.reports`' 50-item cap, or add a
-   `semantic_model_id`-scoped variant of `measure-source-lineage`/
-   `visual-source-lookup`, so cross-report evidence is not capped at 300
-   bound reports client-side.
+   `semantic_model_id`-scoped variant of `visual-source-lookup`, so
+   cross-report evidence is not capped at 300 bound reports client-side.
