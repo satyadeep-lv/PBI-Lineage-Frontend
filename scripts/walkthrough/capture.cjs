@@ -88,8 +88,8 @@ const TABLE_GRAPH = {
   },
 };
 // Measure impact before expanding: every rank from the database table down to the reports, centred on
-// the measure and the report about to be expanded (the row of reports is wider than the canvas).
-const MEASURE_GRAPH = { fit: { all: true }, axis: "height", center: { focal: true, labels: [EXPANDED_REPORT] } };
+// the measure (the row of reports and impacted measures is wider than the canvas and runs off both sides).
+const MEASURE_GRAPH = { fit: { all: true }, axis: "height", center: { focal: true } };
 // Measure impact after expanding: the measure's chain from its database table, the report, and its visuals.
 const MEASURE_VISUALS_GRAPH = {
   fit: { focal: true, ids: ["visual|"], labels: [EXPANDED_REPORT, "Sales", "Sales[Amount]", "ANALYTICS.FINANCE.FACT_SALES"] },
@@ -479,18 +479,18 @@ function storyboard(base) {
       id: "08-power-ai",
       step: 8,
       caption: "Ask Power AI about anything you can see",
-      async ready(page, { mouse }) {
+      async ready(page) {
         const panel = page.getByRole("complementary", { name: "Power AI" });
         await panel.waitFor();
         await panel.getByText("Suggested questions").waitFor();
-        // The docked panel narrows the page; re-frame the graph the way a viewer would.
-        await frameGraph(page, MEASURE_VISUALS_GRAPH, mouse);
+        // The docked panel narrows the page; the graph keeps its zoom and simply shows less of itself.
+        await graphSettled(page);
       },
       moves: [{
-        async before(page, { mouse }) {
+        async before(page) {
           await page.keyboard.press("Escape");
           await page.getByRole("button", { name: "Open Power AI" }).waitFor();
-          await frameGraph(page, MEASURE_VISUALS_GRAPH, mouse);
+          await graphSettled(page);
         },
         target: (page) => documentsTrigger(page),
         click: true,

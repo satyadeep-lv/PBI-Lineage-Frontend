@@ -857,8 +857,8 @@ Semantic model --+--> Semantic table -> columns -> measures -> Reports -> Visual
   physical table behind two models is one node.
 - A focal object (a selected table's column or measure) is drawn only when a
   DAX edge links it to another drawn object or a visual reads it, which keeps
-  a table's unused columns out of the graph. A lone focal object (Measure Impact's measure) is always
-  drawn.
+  a table's unused columns out of the graph. A lone focal object (Measure
+  Impact's measure) is always drawn.
 - The selected tables (Table Impact) or the selected measure (Measure
   Impact) carry the focal ring.
 
